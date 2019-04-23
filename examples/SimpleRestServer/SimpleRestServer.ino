@@ -2,7 +2,7 @@
 #include <ArduinoJson.h>
 
 #include <UrlTokenBindings.h>
-#include <RichWebServer.h>
+#include <RichHttpServer.h>
 #include <map>
 
 // Simple REST server with CRUD routes:
@@ -23,7 +23,7 @@
 const char* WIFI_SSID = "ssid";
 const char* WIFI_PASSWORD = "password";
 
-RichWebServer server(80);
+RichHttpServer server(80);
 std::map<size_t, String> things;
 size_t nextId = 1;
 

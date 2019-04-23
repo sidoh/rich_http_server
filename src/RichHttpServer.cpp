@@ -1,7 +1,7 @@
-#include <RichWebServer.h>
+#include <RichHttpServer.h>
 #include <PathVariableHandler.h>
 
-void RichWebServer::onAuthenticated(const String &uri, THandlerFunction handler) {
+void RichHttpServer::onAuthenticated(const String &uri, THandlerFunction handler) {
   THandlerFunction authHandler = [this, handler]() {
     if (this->validateAuthentication()) {
       handler();
@@ -11,7 +11,7 @@ void RichWebServer::onAuthenticated(const String &uri, THandlerFunction handler)
   TServerType::on(uri, authHandler);
 }
 
-void RichWebServer::onAuthenticated(const String &uri, HTTPMethod method, THandlerFunction handler) {
+void RichHttpServer::onAuthenticated(const String &uri, HTTPMethod method, THandlerFunction handler) {
   THandlerFunction authHandler = [this, handler]() {
     if (this->validateAuthentication()) {
       handler();
@@ -21,7 +21,7 @@ void RichWebServer::onAuthenticated(const String &uri, HTTPMethod method, THandl
   TServerType::on(uri, method, authHandler);
 }
 
-void RichWebServer::onAuthenticated(const String &uri, HTTPMethod method, THandlerFunction handler, THandlerFunction ufn) {
+void RichHttpServer::onAuthenticated(const String &uri, HTTPMethod method, THandlerFunction handler, THandlerFunction ufn) {
   THandlerFunction authHandler = [this, handler]() {
     if (this->validateAuthentication()) {
       handler();
@@ -31,11 +31,11 @@ void RichWebServer::onAuthenticated(const String &uri, HTTPMethod method, THandl
   TServerType::on(uri, method, authHandler, ufn);
 }
 
-void RichWebServer::onPattern(const String& pattern, const HTTPMethod method, PathVariableHandler::TPathVariableHandlerFn handler) {
+void RichHttpServer::onPattern(const String& pattern, const HTTPMethod method, PathVariableHandler::TPathVariableHandlerFn handler) {
   addHandler(new PathVariableHandler(pattern.c_str(), method, handler));
 }
 
-void RichWebServer::onPatternAuthenticated(const String& pattern, const HTTPMethod method, PathVariableHandler::TPathVariableHandlerFn fn) {
+void RichHttpServer::onPatternAuthenticated(const String& pattern, const HTTPMethod method, PathVariableHandler::TPathVariableHandlerFn fn) {
   PathVariableHandler::TPathVariableHandlerFn authHandler = [this, fn](UrlTokenBindings* bindings) {
     if (this->validateAuthentication()) {
       fn(bindings);
@@ -45,17 +45,17 @@ void RichWebServer::onPatternAuthenticated(const String& pattern, const HTTPMeth
   addHandler(new PathVariableHandler(pattern.c_str(), method, authHandler));
 }
 
-void RichWebServer::requireAuthentication(const String& username, const String& password) {
+void RichHttpServer::requireAuthentication(const String& username, const String& password) {
   this->username = username;
   this->password = password;
   this->authEnabled = true;
 }
 
-void RichWebServer::disableAuthentication() {
+void RichHttpServer::disableAuthentication() {
   this->authEnabled = false;
 }
 
-bool RichWebServer::validateAuthentication() {
+bool RichHttpServer::validateAuthentication() {
   if (this->authEnabled &&
     !authenticate(this->username.c_str(), this->password.c_str())) {
       requestAuthentication();
@@ -64,6 +64,6 @@ bool RichWebServer::validateAuthentication() {
     return true;
 }
 
-bool RichWebServer::isAuthenticationEnabled() const {
+bool RichHttpServer::isAuthenticationEnabled() const {
   return this->authEnabled;
 }
