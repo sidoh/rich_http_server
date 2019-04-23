@@ -6,3 +6,4 @@ onPattern               KEYWORD2
 requireAuthentication   KEYWORD2
 disableAuthentication   KEYWORD2
 isAuthenticationEnabled KEYWORD2
+isClientConnected       KEYWORD2

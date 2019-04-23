@@ -67,3 +67,7 @@ bool RichHttpServer::validateAuthentication() {
 bool RichHttpServer::isAuthenticationEnabled() const {
   return this->authEnabled;
 }
+
+bool RichHttpServer::isClientConnected() const {
+  return _currentClient && _currentClient.connected();
+}
