@@ -1,0 +1,36 @@
+{
+  "name": "RichHttpServer",
+  "keywords": "rest, http, server",
+  "description": "An addon for ESP8266WebServer which makes common tasks for developing a rich REST API straightforward",
+  "repository":
+  {
+    "type": "git",
+    "url": "https://github.com/sidoh/rich_http_server.git"
+  },
+  "authors":
+  [
+    {
+      "name": "Chris Mullins",
+      "email": "chris@sidoh.org",
+      "url": "http://github.com/sidoh",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "version": "1.0.0",
+  "frameworks": "arduino",
+  "platforms": [
+    "espressif8266",
+    "espressif32"
+  ],
+  "examples": "examples/*/*.ino",
+  "exclude": [
+    "test"
+  ],
+  "dependencies": [
+    {
+      "name": "PathVariableHandlers",
+      "version": "~1.1.0"
+    }
+  ]
+}
