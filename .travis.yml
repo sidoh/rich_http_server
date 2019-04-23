@@ -26,8 +26,6 @@ matrix:
       - PLATFORMIO_ADDITIONAL_ARGS='--lib=.'
       - BOARDS=--board=esp32doit-devkit-v1
       - PLATFORMIO_CMD=ci
-    - env:
-      - PLATFORMIO_CMD=test
 
 script:
   - platformio ${PLATFORMIO_CMD} ${BOARDS} ${PLATFORMIO_ADDITIONAL_ARGS}
