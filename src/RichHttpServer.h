@@ -4,15 +4,15 @@
 #if defined(ESP8266)
 #include <ESP8266WebServer.h>
 
-class RichWebServer : public ESP8266WebServer {
+class RichHttpServer : public ESP8266WebServer {
 public:
-  RichWebServer(int port) : ESP8266WebServer(port) { }
+  RichHttpServer(int port) : ESP8266WebServer(port) { }
 #elif defined(ESP32)
 #include <WebServer.h>
 
-class RichWebServer : public WebServer {
+class RichHttpServer : public WebServer {
 public:
-  RichWebServer(int port) : WebServer(port) { }
+  RichHttpServer(int port) : WebServer(port) { }
 #else
 #error "Unsupported platform.  Only works with ESP8266 and ESP32"
 #endif
