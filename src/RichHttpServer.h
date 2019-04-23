@@ -36,7 +36,7 @@ public:
   bool isAuthenticationEnabled() const;
 
   // Returns true if there's currently a client connected to the server.
-  bool isClientConnected() const;
+  bool isClientConnected();
 
 private:
   bool authEnabled;

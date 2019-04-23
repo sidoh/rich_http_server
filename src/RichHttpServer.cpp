@@ -68,6 +68,6 @@ bool RichHttpServer::isAuthenticationEnabled() const {
   return this->authEnabled;
 }
 
-bool RichHttpServer::isClientConnected() const {
+bool RichHttpServer::isClientConnected() {
   return _currentClient && _currentClient.connected();
 }
