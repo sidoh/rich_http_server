@@ -13,7 +13,7 @@ This library is built on top of handler bindings tied to the espressif platform.
 Build examples with, for instance:
 
 ```
-platformio ci --board=d1_mini --lib=. examples/esp8266_simple
+platformio ci --board=d1_mini --lib=. examples/SimpleRestServer
 ```
 
 #### New Release
