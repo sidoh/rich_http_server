@@ -1,30 +1,26 @@
 #include <Arduino.h>
 #include <PathVariableHandler.h>
+#include <RequestHandlers.h>
+#include <vector>
 
-#if defined(ESP8266)
+#if defined(PVH_USE_ASYNC_WEBSERVER)
+#include <ESPAsyncWebServer.h>
+#elif defined(ESP8266)
 #include <ESP8266WebServer.h>
-
-class RichHttpServer : public ESP8266WebServer {
-public:
-  RichHttpServer(int port) : ESP8266WebServer(port) { }
 #elif defined(ESP32)
 #include <WebServer.h>
-
-class RichHttpServer : public WebServer {
-public:
-  RichHttpServer(int port) : WebServer(port) { }
 #else
 #error "Unsupported platform.  Only works with ESP8266 and ESP32"
 #endif
 
-  // Wrap the on(...) methods in a handler that requires authentication if enabled.
-  void onAuthenticated(const String &uri, THandlerFunction handler);
-  void onAuthenticated(const String &uri, HTTPMethod method, THandlerFunction fn);
-  void onAuthenticated(const String &uri, HTTPMethod method, THandlerFunction fn, THandlerFunction ufn);
+class HandlerBuilder;
 
-  // onPattern handlers allow for paths that have variables in them, e.g. /things/:thing_id.
-  void onPattern(const String& pattern, const HTTPMethod method, PathVariableHandler::TPathVariableHandlerFn fn);
-  void onPatternAuthenticated(const String& pattern, const HTTPMethod method, PathVariableHandler::TPathVariableHandlerFn handler);
+class RichHttpServer : public TServerType {
+public:
+  RichHttpServer(int port) : TServerType(port) { }
+  ~RichHttpServer();
+
+  HandlerBuilder& buildHandler(const String& path, bool disableAuth = false);
 
   // Enables authentication using the provided username and password
   void requireAuthentication(const String& username, const String& password);
@@ -36,12 +32,74 @@ public:
   bool isAuthenticationEnabled() const;
 
   // Returns true if there's currently a client connected to the server.
-  bool isClientConnected();
+#ifndef PVH_ASYNC_WEBSERVER
+  bool isClientConnected() {
+    return _currentClient && _currentClient.connected();
+  }
+#endif
+
+  // Validates that client has provided auth for a particular request
+#ifndef PVH_ASYNC_WEBSERVER
+  bool validateAuthentication();
+#else
+  bool validateAuthentication(AsyncWebServerRequest* request) {
+    return !isAuthenticationEnabled() || request->authenticate(username.c_str(), password.c_str());
+  }
+#endif
 
 private:
   bool authEnabled;
   String username;
   String password;
 
-  bool validateAuthentication();
+  std::vector<HandlerBuilder*> handlerBuilders;
+};
+
+class HandlerBuilder {
+public:
+  HandlerBuilder(RichHttpServer& server, const String& path, const bool disableAuth = false);
+
+  template <typename TMethod>
+  HandlerBuilder& on(const TMethod verb, PathVariableHandler::TPathVariableHandlerFn fn) {
+    server.addHandler(new PathVariableHandler(path.c_str(), verb, buildAuthedHandler(fn)));
+    return *this;
+  }
+
+  template <typename TMethod, typename THandler>
+  HandlerBuilder& on(const TMethod verb, PathVariableHandler::TPathVariableHandlerFn fn, THandler bodyFn) {
+#ifndef PVH_ASYNC_WEBSERVER
+    server.addHandler(
+      new RichFunctionRequestHandler(
+        buildAuthedHandler(fn),
+        bodyFn,
+        path,
+        verb
+      )
+    );
+#else
+    PathVariableHandler* handler = new PathVariableHandler(
+      path.c_str(),
+      verb,
+      fn,
+      bodyFn
+    );
+    server.addHandler(handler);
+#endif
+
+    return *this;
+  }
+
+private:
+  bool disableAuth;
+  const String path;
+  RichHttpServer& server;
+
+  template <class RetType, class ...Us>
+  inline std::function<RetType(Us... args)> buildAuthedHandler(std::function<RetType(Us... args)> fn) {
+    return [fn, this](Us... args) {
+      if (disableAuth || server.validateAuthentication()) {
+        return fn(args...);
+      }
+    };
+  };
 };
