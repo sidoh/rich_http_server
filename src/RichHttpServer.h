@@ -59,26 +59,41 @@ class HandlerBuilder {
 public:
   HandlerBuilder(RichHttpServer& server, const String& path, const bool disableAuth = false);
 
+  // Add handlers to the attached server.
+  // There's very likely a better way to DRY the templated methods.
   template <typename TMethod>
   HandlerBuilder& on(const TMethod verb, PathVariableHandler::TPathVariableHandlerFn fn) {
-    server.addHandler(new PathVariableHandler(path.c_str(), verb, buildAuthedHandler(fn)));
+    return on(verb, "", fn);
+  }
+
+  template <typename TMethod>
+  HandlerBuilder& on(const TMethod verb, const String& suffix, PathVariableHandler::TPathVariableHandlerFn fn) {
+    String fullPath = path + suffix;
+    server.addHandler(new PathVariableHandler(fullPath.c_str(), verb, buildAuthedHandler(fn)));
     return *this;
   }
 
   template <typename TMethod, typename THandler>
   HandlerBuilder& on(const TMethod verb, PathVariableHandler::TPathVariableHandlerFn fn, THandler bodyFn) {
+    return on(verb, "", fn, bodyFn);
+  }
+
+  template <typename TMethod, typename THandler>
+  HandlerBuilder& on(const TMethod verb, const String& suffix, PathVariableHandler::TPathVariableHandlerFn fn, THandler bodyFn) {
+    String fullPath = path + suffix;
+
 #ifndef PVH_ASYNC_WEBSERVER
     server.addHandler(
       new RichFunctionRequestHandler(
         buildAuthedHandler(fn),
         bodyFn,
-        path,
+        fullPath,
         verb
       )
     );
 #else
     PathVariableHandler* handler = new PathVariableHandler(
-      path.c_str(),
+      fullPath.c_str(),
       verb,
       fn,
       bodyFn
@@ -94,6 +109,18 @@ private:
   const String path;
   RichHttpServer& server;
 
+  // Wraps a given lambda in one that checks if auth is enabled, and validates auth if it is.
+  // separate impls needed for the builtin HTTP server and AsyncWebServer.
+#ifdef PVH_ASYNC_WEBSERVER
+  template <class RetType, class ...Us>
+  inline std::function<RetType(AsyncWebServerRequest*, Us... args)> buildAuthedHandler(std::function<RetType(AsyncWebServerRequest*, Us... args)> fn) {
+    return [fn, this](AsyncWebServerRequest* r, Us... args) {
+      if (disableAuth || server.validateAuthentication(r)) {
+        return fn(r, args...);
+      }
+    };
+  };
+#else
   template <class RetType, class ...Us>
   inline std::function<RetType(Us... args)> buildAuthedHandler(std::function<RetType(Us... args)> fn) {
     return [fn, this](Us... args) {
@@ -102,4 +129,5 @@ private:
       }
     };
   };
+#endif
 };
