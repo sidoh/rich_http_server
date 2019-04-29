@@ -59,6 +59,10 @@ void handleDeleteThing(const UrlTokenBindings* bindings) {
   }
 }
 
+void handleAbout() {
+  server.send(200, "text/plain", "about");
+}
+
 void handleAddNewThing() {
   size_t id = nextId++;
   const String& val = server.arg("plain");
@@ -108,6 +112,10 @@ void handleAuth() {
   server.send(200, "text/plain", "OK");
 }
 
+void handleStaticResponse(const char* response) {
+  server.send(200, "text/plain", response);
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -116,13 +124,25 @@ void setup() {
   // Handle requests of the form GET /things/:thing_id.
   // For example, the request `GET /things/abc` would bind `abc` to the request
   // variable `thing_id`.
-  server.onPatternAuthenticated("/things/:thing_id", HTTP_GET, handleGetThing);
-  server.onPatternAuthenticated("/things/:thing_id", HTTP_PUT, handlePutThing);
-  server.onPatternAuthenticated("/things/:thing_id", HTTP_DELETE, handleDeleteThing);
-  server.onAuthenticated("/things", HTTP_POST, handleAddNewThing);
-  server.onAuthenticated("/things", HTTP_GET, handleListThings);
+  server
+    .buildHandler("/things/:thing_id")
+    .on(HTTP_GET, handleGetThing)
+    .on(HTTP_PUT, handlePutThing)
+    .on(HTTP_DELETE, handleDeleteThing);
 
-  server.onAuthenticated("/sys/auth", HTTP_POST, handleAuth);
+  server
+    .buildHandler("/things")
+    .on(
+      HTTP_POST,
+      std::bind(handleStaticResponse, "OK"),
+      handleAddNewThing
+    )
+    .on(HTTP_GET, std::bind(handleListThings));
+
+  server
+    .buildHandler("/about")
+    .setDisableAuthOverride()
+    .on(HTTP_GET, std::bind(handleAbout));
 
   server.begin();
 }

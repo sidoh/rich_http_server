@@ -44,3 +44,8 @@ HandlerBuilder::HandlerBuilder(RichHttpServer& server, const String& path, const
   , path(path)
   , server(server)
 { }
+
+HandlerBuilder& HandlerBuilder::setDisableAuthOverride() {
+  this->disableAuth = true;
+  return *this;
+}

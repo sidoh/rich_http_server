@@ -59,6 +59,8 @@ class HandlerBuilder {
 public:
   HandlerBuilder(RichHttpServer& server, const String& path, const bool disableAuth = false);
 
+  HandlerBuilder& setDisableAuthOverride();
+
   // Add handlers to the attached server.
   // There's very likely a better way to DRY the templated methods.
   template <typename TMethod>
