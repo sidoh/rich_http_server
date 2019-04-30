@@ -65,37 +65,24 @@ public:
   // There's very likely a better way to DRY the templated methods.
   template <typename TMethod>
   HandlerBuilder& on(const TMethod verb, PathVariableHandler::TPathVariableHandlerFn fn) {
-    return on(verb, "", fn);
-  }
-
-  template <typename TMethod>
-  HandlerBuilder& on(const TMethod verb, const String& suffix, PathVariableHandler::TPathVariableHandlerFn fn) {
-    String fullPath = path + suffix;
-    server.addHandler(new PathVariableHandler(fullPath.c_str(), verb, buildAuthedHandler(fn)));
+    server.addHandler(new PathVariableHandler(path.c_str(), verb, buildAuthedHandler(fn)));
     return *this;
   }
 
   template <typename TMethod, typename THandler>
   HandlerBuilder& on(const TMethod verb, PathVariableHandler::TPathVariableHandlerFn fn, THandler bodyFn) {
-    return on(verb, "", fn, bodyFn);
-  }
-
-  template <typename TMethod, typename THandler>
-  HandlerBuilder& on(const TMethod verb, const String& suffix, PathVariableHandler::TPathVariableHandlerFn fn, THandler bodyFn) {
-    String fullPath = path + suffix;
-
 #ifndef PVH_ASYNC_WEBSERVER
     server.addHandler(
       new RichFunctionRequestHandler(
         buildAuthedHandler(fn),
         bodyFn,
-        fullPath,
+        path,
         verb
       )
     );
 #else
     PathVariableHandler* handler = new PathVariableHandler(
-      fullPath.c_str(),
+      path.c_str(),
       verb,
       fn,
       bodyFn
