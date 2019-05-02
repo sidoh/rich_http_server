@@ -24,8 +24,16 @@ using namespace std::placeholders;
 //
 // Note that you'll need to have the ArduinoJson library installed as well.
 
-const char* WIFI_SSID = "ssid";
-const char* WIFI_PASSWORD = "password";
+#define XQUOTE(x) #x
+#define QUOTE(x) XQUOTE(x)
+
+#ifndef WIFI_SSID
+#define WIFI_SSID "ssid"
+#endif
+
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD "password"
+#endif
 
 RichHttpServer<RichHttp::Generics::Configs::AsyncWebServer> server(80);
 
@@ -69,8 +77,12 @@ void handleAbout(AsyncWebServerRequest* request) {
 }
 
 void handleAddNewThing(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+  char body[len+1];
+  strncpy(body, reinterpret_cast<char*>(data), len);
+  body[len] = 0;
+
   size_t id = nextId++;
-  const String& val = String(reinterpret_cast<char*>(data));
+  const String& val = String(body);
   things[id] = val;
 
   StaticJsonDocument<100> doc;
@@ -101,10 +113,8 @@ void handleListThings(AsyncWebServerRequest* request) {
 }
 
 void handleAuth(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-  const String val(reinterpret_cast<char*>(data));
-
   StaticJsonDocument<100> doc;
-  deserializeJson(doc, val);
+  deserializeJson(doc, data);
 
   JsonObject obj = doc.as<JsonObject>();
 
@@ -124,7 +134,7 @@ void handleStaticResponse(AsyncWebServerRequest* request, const char* response) 
 void setup() {
   Serial.begin(115200);
 
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(QUOTE(WIFI_SSID), QUOTE(WIFI_PASSWORD));
 
   // Handle requests of the form GET /things/:thing_id.
   // For example, the request `GET /things/abc` would bind `abc` to the request
@@ -132,7 +142,7 @@ void setup() {
   server
     .buildHandler("/things/:thing_id")
     .on(HTTP_GET, std::bind(handleGetThing, _1, _2))
-    .on(HTTP_PUT, std::bind(handlePutThing, _1, _2))
+    .onBody(HTTP_PUT, std::bind(handlePutThing, _1, _2, _3, _4, _5, _6))
     .on(HTTP_DELETE, std::bind(handleDeleteThing, _1, _2));
 
   server
@@ -144,6 +154,12 @@ void setup() {
     .buildHandler("/about")
     .setDisableAuthOverride()
     .on(HTTP_GET, std::bind(handleAbout, _1));
+
+  server
+    .buildHandler("/sys/auth")
+    .onBody(HTTP_PUT, std::bind(handleAuth, _1, _3, _4, _5, _6));
+
+  server.clearBuilders();
 
   server.begin();
 }

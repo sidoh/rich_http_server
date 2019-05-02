@@ -73,6 +73,8 @@ namespace RichHttp {
             if (!this->authProvider->isAuthenticationEnabled()
               || request->authenticate(this->authProvider->getUsername().c_str(), this->authProvider->getPassword().c_str())) {
               return fn(request, args...);
+            } else {
+              return request->requestAuthentication();
             }
           };
         }

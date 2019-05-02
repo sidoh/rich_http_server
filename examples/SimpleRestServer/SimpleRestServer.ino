@@ -20,8 +20,16 @@
 //
 // Note that you'll need to have the ArduinoJson library installed as well.
 
-const char* WIFI_SSID = "ssid";
-const char* WIFI_PASSWORD = "password";
+#define XQUOTE(x) #x
+#define QUOTE(x) XQUOTE(x)
+
+#ifndef WIFI_SSID
+#define WIFI_SSID ssid
+#endif
+
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD password
+#endif
 
 #if defined(ARDUINO_ARCH_ESP8266)
 RichHttpServer<RichHttp::Generics::Configs::ESP8266Config> server(80);
@@ -123,7 +131,7 @@ void handleStaticResponse(const char* response) {
 void setup() {
   Serial.begin(115200);
 
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(QUOTE(WIFI_SSID), QUOTE(WIFI_PASSWORD));
 
   // Handle requests of the form GET /things/:thing_id.
   // For example, the request `GET /things/abc` would bind `abc` to the request
@@ -147,6 +155,11 @@ void setup() {
     .setDisableAuthOverride()
     .on(HTTP_GET, std::bind(handleAbout));
 
+  server
+    .buildHandler("/sys/auth")
+    .onBody(HTTP_PUT, std::bind(handleAuth));
+
+  server.clearBuilders();
   server.begin();
 }
 
