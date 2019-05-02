@@ -42,11 +42,11 @@ void handleGetThing(AsyncWebServerRequest* request, const UrlTokenBindings* bind
   }
 }
 
-void handlePutThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
+void handlePutThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings, uint8_t* data, size_t len, size_t index, size_t total) {
   size_t id = atoi(bindings->get("thing_id"));
 
   if (things.count(id)) {
-    things[id] = request->arg("plain");
+    things[id] = String(reinterpret_cast<char*>(data));
     request->send(200, "application/json", "true");
   } else {
     request->send(404, "text/plain", "Not found");
@@ -70,7 +70,7 @@ void handleAbout(AsyncWebServerRequest* request) {
 
 void handleAddNewThing(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
   size_t id = nextId++;
-  const String& val = request->arg("plain");
+  const String& val = String(reinterpret_cast<char*>(data));
   things[id] = val;
 
   StaticJsonDocument<100> doc;
@@ -100,8 +100,8 @@ void handleListThings(AsyncWebServerRequest* request) {
   request->send(200, "application/json", response);
 }
 
-void handleAuth(AsyncWebServerRequest* request) {
-  const String& val = request->arg("plain");
+void handleAuth(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+  const String val(reinterpret_cast<char*>(data));
 
   StaticJsonDocument<100> doc;
   deserializeJson(doc, val);
