@@ -62,27 +62,49 @@ public:
 
   // Add handlers to the attached server.
   HandlerBuilder<Config>& on(const typename Config::HttpMethod verb, typename Config::RequestHandlerFn::type fn) {
-    server.addHandler(new typename Config::RequestHandlerType(verb, path.c_str(), authedFnBuilder->buildAuthedFn(fn), nullptr, nullptr));
+    if (! this->disableAuth) {
+      fn = authedFnBuilder->buildAuthedFn(fn);
+    }
+
+    server.addHandler(new typename Config::RequestHandlerType(verb, path.c_str(), fn, nullptr, nullptr));
     return *this;
   }
 
   HandlerBuilder& on(const typename Config::HttpMethod verb, typename Config::RequestHandlerFn::type fn, typename Config::BodyRequestHandlerFn::type bodyFn) {
-    server.addHandler(new typename Config::RequestHandlerType(path.c_str(), verb, authedFnBuilder->buildAuthedFn(fn), authedFnBuilder->buildAuthedBodyFn(bodyFn), nullptr));
+    if (! this->disableAuth) {
+      fn = authedFnBuilder->buildAuthedFn(fn);
+      bodyFn = authedFnBuilder->buildAuthedBodyFn(bodyFn);
+    }
+
+    server.addHandler(new typename Config::RequestHandlerType(path.c_str(), verb, fn, bodyFn, nullptr));
     return *this;
   }
 
   HandlerBuilder& onBody(const typename Config::HttpMethod verb, typename Config::BodyRequestHandlerFn::type bodyFn) {
-    server.addHandler(new typename Config::RequestHandlerType(HTTP_POST, path.c_str(), nullptr, authedFnBuilder->buildAuthedBodyFn(bodyFn), nullptr));
+    if (! this->disableAuth) {
+      bodyFn = authedFnBuilder->buildAuthedBodyFn(bodyFn);
+    }
+
+    server.addHandler(new typename Config::RequestHandlerType(verb, path.c_str(), nullptr, bodyFn, nullptr));
     return *this;
   }
 
   HandlerBuilder& onUpload(typename Config::RequestHandlerFn::type fn, typename Config::UploadRequestHandlerFn::type uploadFn) {
-    server.addHandler(new typename Config::RequestHandlerType(HTTP_POST, path.c_str(), authedFnBuilder->buildAuthedFn(fn), nullptr, authedFnBuilder->buildAuthedUploadFn(uploadFn)));
+    if (! this->disableAuth) {
+      fn = authedFnBuilder->buildAuthedFn(fn);
+      uploadFn = authedFnBuilder->buildAuthedUploadFn(uploadFn);
+    }
+
+    server.addHandler(new typename Config::RequestHandlerType(HTTP_POST, path.c_str(), fn, nullptr, uploadFn));
     return *this;
   }
 
   HandlerBuilder& onUpload(typename Config::UploadRequestHandlerFn::type uploadFn) {
-    server.addHandler(new typename Config::RequestHandlerType(HTTP_POST, path.c_str(), nullptr, nullptr, authedFnBuilder->buildAuthedUploadFn(uploadFn)));
+    if (! this->disableAuth) {
+      uploadFn = authedFnBuilder->buildAuthedUploadFn(uploadFn);
+    }
+
+    server.addHandler(new typename Config::RequestHandlerType(HTTP_POST, path.c_str(), nullptr, nullptr, uploadFn));
     return *this;
   }
 
@@ -91,26 +113,4 @@ private:
   const String path;
   RichHttpServer<Config>& server;
   typename Config::AuthedFnBuilderType* authedFnBuilder;
-
-  // Wraps a given lambda in one that checks if auth is enabled, and validates auth if it is.
-  // separate impls needed for the builtin HTTP server and AsyncWebServer.
-#ifdef PVH_ASYNC_WEBSERVER
-  template <class RetType, class ...Us>
-  inline std::function<RetType(AsyncWebServerRequest*, Us... args)> buildAuthedHandler(std::function<RetType(AsyncWebServerRequest*, Us... args)> fn) {
-    return [fn, this](AsyncWebServerRequest* r, Us... args) {
-      if (disableAuth || server.validateAuthentication(r)) {
-        return fn(r, args...);
-      }
-    };
-  };
-#else
-  template <class RetType, class ...Us>
-  inline std::function<RetType(Us... args)> buildAuthedHandler(std::function<RetType(Us... args)> fn) {
-    return [fn, this](Us... args) {
-      if (disableAuth || server.validateAuthentication()) {
-        return fn(args...);
-      }
-    };
-  };
-#endif
 };
