@@ -14,6 +14,7 @@ namespace RichHttp {
 
     namespace Configs {
       using ESP32Config = espressif_config<WebServer, ESP32RequestHandler>;
+      using EspressifBuiltin = ESP32Config;
     };
 
     class ESP32RequestHandler : public EspressifRequestHandler<Configs::ESP32Config> {

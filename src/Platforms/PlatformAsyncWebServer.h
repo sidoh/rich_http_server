@@ -3,7 +3,7 @@
 #include "Generics.h"
 #include <functional>
 
-#if defined(RICH_HTTP_ASYNC_WEBSERVER)
+#if defined(_ESPAsyncWebServer_H_) || defined(RICH_HTTP_ASYNC_WEBSERVER)
 #include <ESPAsyncWebServer.h>
 #include <UrlTokenBindings.h>
 
@@ -45,7 +45,9 @@ namespace RichHttp {
       public:
 
         template <class... Args>
-        AsyncAuthedFnBuilder(Args... args) : AuthedFnBuilder<TServerType, THandler, TBodyHandler, TUploadHandler>(args...) {}
+        AsyncAuthedFnBuilder(Args... args)
+          : AuthedFnBuilder<TServerType, THandler, TBodyHandler, TUploadHandler>
+        (args...) {}
 
         using fn_type = typename THandler::type;
         using body_fn_type = typename TBodyHandler::type;
@@ -64,9 +66,12 @@ namespace RichHttp {
         }
 
         template <class RetType, class... Args>
-        std::function<RetType(AsyncWebServerRequest*, Args...)> buildAuthedHandler(std::function<RetType(AsyncWebServerRequest*, Args...)> fn) {
+        std::function<RetType(AsyncWebServerRequest*, Args...)> buildAuthedHandler(
+          std::function<RetType(AsyncWebServerRequest*, Args...)> fn
+        ) {
           return [this, fn](AsyncWebServerRequest* request, Args... args) {
-            if (!this->authProvider->isAuthenticationEnabled() || request->authenticate(this->authProvider->getUsername().c_str(), this->authProvider->getPassword().c_str())) {
+            if (!this->authProvider->isAuthenticationEnabled()
+              || request->authenticate(this->authProvider->getUsername().c_str(), this->authProvider->getPassword().c_str())) {
               return fn(request, args...);
             }
           };
@@ -93,7 +98,9 @@ namespace RichHttp {
       public:
 
         template <class... Args>
-        AsyncRequestHandler(Args... args) : ::RichHttp::Generics::BaseRequestHandler<Configs::AsyncWebServer, ::AsyncWebHandler>(HTTP_ANY, args...) { }
+        AsyncRequestHandler(Args... args)
+          : ::RichHttp::Generics::BaseRequestHandler<Configs::AsyncWebServer, ::AsyncWebHandler>
+        (HTTP_ANY, args...) { }
 
         virtual bool canHandle(AsyncWebServerRequest* request) override {
           return this->_canHandle(request->method(), request->url().c_str(), request->url().length());
@@ -125,7 +132,11 @@ namespace RichHttp {
         }
 
         template <class... OtherArgs>
-        void forwardToHandler(std::function<void(AsyncWebServerRequest*, const UrlTokenBindings*, OtherArgs...)> fn, AsyncWebServerRequest* request, OtherArgs... args) {
+        void forwardToHandler(
+          std::function<void(AsyncWebServerRequest*, const UrlTokenBindings*, OtherArgs...)> fn,
+          AsyncWebServerRequest* request,
+          OtherArgs... args
+        ) {
           if (fn) {
             char requestUriCopy[request->url().length() + 1];
             strcpy(requestUriCopy, request->url().c_str());

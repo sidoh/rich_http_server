@@ -7,6 +7,7 @@
 
 #if defined(ARDUINO_ARCH_ESP8266) && !defined(RICH_HTTP_ASYNC_WEBSERVER)
 #include <ESP8266WebServer.h>
+#define WEBSERVER_H
 
 namespace RichHttp {
   namespace Generics {
@@ -14,6 +15,7 @@ namespace RichHttp {
 
     namespace Configs {
       using ESP8266Config = espressif_config<ESP8266WebServer, ESP8266RequestHandler>;
+      using EspressifBuiltin = ESP8266Config;
     };
 
     class ESP8266RequestHandler : public EspressifRequestHandler<Configs::ESP8266Config> {
