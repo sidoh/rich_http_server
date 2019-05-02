@@ -25,25 +25,15 @@ public:
     return *builder;
   }
 
+  void clearBuilders() {
+    handlerBuilders.clear();
+  }
+
   // Returns true if there's currently a client connected to the server.
-#ifndef PVH_ASYNC_WEBSERVER
+  // This is only necessary for the builtin webservers
+#if (defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32)) && !defined(RICH_HTTP_ASYNC_WEBSERVER)
   bool isClientConnected() {
     return this->_currentClient && this->_currentClient.connected();
-  }
-#endif
-
-  // Validates that client has provided auth for a particular request
-#ifndef PVH_ASYNC_WEBSERVER
-  bool validateAuthentication() {
-    if (this->authEnabled && !this->authenticate(this->username.c_str(), this->password.c_str())) {
-      this->requestAuthentication();
-      return false;
-    }
-    return true;
-  }
-#else
-  bool validateAuthentication(AsyncWebServerRequest* request) {
-    return !isAuthenticationEnabled() || request->authenticate(username.c_str(), password.c_str());
   }
 #endif
 

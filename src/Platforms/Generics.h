@@ -8,31 +8,14 @@
 
 namespace RichHttp {
   namespace Generics {
-    template <size_t...>
-    struct ArgSequence;
-
-    template <size_t I_0, size_t... I_ns>
-    struct ArgSequenceGen : ArgSequenceGen<I_0 - 1, I_0 - 1, I_ns...>
-    { };
-
-    template <size_t... I_ns>
-    struct ArgSequenceGen<0, I_ns...> {
-      typedef ArgSequence<I_ns...> type;
-    };
-
-    template <typename... TArgs>
-    struct ArgumentPack { };
-
     template <class ReturnType, class... TArgs>
     struct FunctionWrapper {
       using type = typename std::function<ReturnType(TArgs...)>;
-      // using arg_types = std::tuple<TArgs...>;//ArgumentPack<TArgs...>;
     };
 
     template <
       class TServer,
       class THttpMethod,
-      THttpMethod HttpMethodAnyValue,
       class TRequest,
       class TResponseHandlerReturn,
       class TRequestHandler,
@@ -44,7 +27,6 @@ namespace RichHttp {
     struct HandlerConfig {
       using ServerType = TServer;
       using HttpMethod = THttpMethod;
-      const THttpMethod HTTP_ANY_VALUE;
       using RequestType = TRequest;
       using ResponseHandlerReturnType = TResponseHandlerReturn;
       using RequestHandlerFn = TRequestHandler;
@@ -52,8 +34,6 @@ namespace RichHttp {
       using UploadRequestHandlerFn = TUploadRequestHandler;
       using RequestHandlerType = TRequestHandlerClass;
       using AuthedFnBuilderType = TAuthedFnBuilder;
-
-      HandlerConfig() : HTTP_ANY_VALUE(HttpMethodAnyValue) { };
     };
 
     template<
@@ -91,12 +71,14 @@ namespace RichHttp {
     class BaseRequestHandler : public THandlerClass {
       public:
         BaseRequestHandler(
+          typename Config::HttpMethod anyMethod,
           typename Config::HttpMethod method,
           const char* _path,
           typename Config::RequestHandlerFn::type handlerFn,
           typename Config::BodyRequestHandlerFn::type bodyFn = NULL,
           typename Config::UploadRequestHandlerFn::type uploadFn = NULL
-        ) : method(method)
+        ) : anyMethod(anyMethod)
+          , method(method)
           , path(new char[strlen(_path) + 1])
           , handlerFn(handlerFn)
           , bodyFn(bodyFn)
@@ -147,7 +129,7 @@ namespace RichHttp {
         }
 
         virtual bool _canHandle(typename Config::HttpMethod requestMethod, const char* path, size_t length) {
-          if (this->method != Config().HTTP_ANY_VALUE && requestMethod != this->method) {
+          if (this->method != this->anyMethod && requestMethod != this->method) {
             return false;
           }
 
@@ -155,6 +137,7 @@ namespace RichHttp {
         }
 
       protected:
+        typename Config::HttpMethod anyMethod;
         typename Config::HttpMethod method;
         char* path;
         typename Config::RequestHandlerFn::type handlerFn;

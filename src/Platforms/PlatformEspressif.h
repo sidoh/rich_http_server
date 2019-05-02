@@ -33,7 +33,6 @@ namespace RichHttp {
       struct espressif_config : Generics::HandlerConfig<
         TServerType,
         HTTPMethod,
-        HTTP_ANY,
         void*,
         void,
         THandlerFn,
@@ -49,7 +48,7 @@ namespace RichHttp {
       public:
 
         template <class... Args>
-        EspressifRequestHandler(Args... args) : RichHttp::Generics::BaseRequestHandler<TConfig, ::RequestHandler>(args...)
+        EspressifRequestHandler(Args... args) : RichHttp::Generics::BaseRequestHandler<TConfig, ::RequestHandler>(HTTP_ANY, args...)
         { }
 
         virtual bool canHandle(typename TConfig::HttpMethod method, String uri) override {

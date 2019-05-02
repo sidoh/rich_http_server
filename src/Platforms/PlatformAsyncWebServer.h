@@ -79,7 +79,6 @@ namespace RichHttp {
       using AsyncWebServer = Generics::HandlerConfig<
         ::AsyncWebServer,
         WebRequestMethodComposite,
-        HTTP_ANY,
         AsyncWebServerRequest*,
         void,
         typename AsyncFns::handler_type,
@@ -94,7 +93,7 @@ namespace RichHttp {
       public:
 
         template <class... Args>
-        AsyncRequestHandler(Args... args) : ::RichHttp::Generics::BaseRequestHandler<Configs::AsyncWebServer, ::AsyncWebHandler>(args...) { }
+        AsyncRequestHandler(Args... args) : ::RichHttp::Generics::BaseRequestHandler<Configs::AsyncWebServer, ::AsyncWebHandler>(HTTP_ANY, args...) { }
 
         virtual bool canHandle(AsyncWebServerRequest* request) override {
           return this->_canHandle(request->method(), request->url().c_str(), request->url().length());
