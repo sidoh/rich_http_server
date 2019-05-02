@@ -20,27 +20,40 @@ namespace RichHttp {
       typedef ArgSequence<I_ns...> type;
     };
 
+    template <typename... TArgs>
+    struct ArgumentPack { };
+
     template <class ReturnType, class... TArgs>
     struct FunctionWrapper {
-      typedef std::function<ReturnType(TArgs...)> type;
+      using type = typename std::function<ReturnType(TArgs...)>;
+      // using arg_types = std::tuple<TArgs...>;//ArgumentPack<TArgs...>;
     };
 
     template <
       class TServer,
       class THttpMethod,
+      THttpMethod HttpMethodAnyValue,
+      class TRequest,
       class TResponseHandlerReturn,
       class TRequestHandler,
       class TBodyRequestHandler,
       class TUploadRequestHandler,
-      class TRequestHandlerClass
+      class TRequestHandlerClass,
+      class TAuthedFnBuilder
     >
     struct HandlerConfig {
       using ServerType = TServer;
       using HttpMethod = THttpMethod;
+      const THttpMethod HTTP_ANY_VALUE;
+      using RequestType = TRequest;
+      using ResponseHandlerReturnType = TResponseHandlerReturn;
       using RequestHandlerFn = TRequestHandler;
       using BodyRequestHandlerFn = TBodyRequestHandler;
       using UploadRequestHandlerFn = TUploadRequestHandler;
       using RequestHandlerType = TRequestHandlerClass;
+      using AuthedFnBuilderType = TAuthedFnBuilder;
+
+      HandlerConfig() : HTTP_ANY_VALUE(HttpMethodAnyValue) { };
     };
 
     template<
@@ -50,6 +63,28 @@ namespace RichHttp {
     struct ServerConfig {
       using ConfigType = TConfig;
       using RequestHandlerType = TRequestHandler;
+    };
+
+    template<
+      class TServerType,
+      class TMethodWrapper,
+      class TBodyMethodWrapper,
+      class TUploadMethodWrapper
+    >
+    class AuthedFnBuilder {
+      public:
+        AuthedFnBuilder(TServerType* server, const AuthProvider* authProvider)
+          : server(server)
+          , authProvider(authProvider)
+        {}
+
+        virtual typename TMethodWrapper::type buildAuthedFn(typename TMethodWrapper::type) = 0;
+        virtual typename TBodyMethodWrapper::type buildAuthedBodyFn(typename TBodyMethodWrapper::type) = 0;
+        virtual typename TUploadMethodWrapper::type buildAuthedUploadFn(typename TUploadMethodWrapper::type) = 0;
+
+      protected:
+        TServerType* server;
+        const AuthProvider* authProvider;
     };
 
     template <class Config, class THandlerClass>
@@ -112,7 +147,7 @@ namespace RichHttp {
         }
 
         virtual bool _canHandle(typename Config::HttpMethod requestMethod, const char* path, size_t length) {
-          if (this->method != HTTP_ANY && requestMethod != this->method) {
+          if (this->method != Config().HTTP_ANY_VALUE && requestMethod != this->method) {
             return false;
           }
 

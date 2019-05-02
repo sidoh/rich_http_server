@@ -1,9 +1,13 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+#include <ESPAsyncWebServer.h>
+
 #include <UrlTokenBindings.h>
 #include <RichHttpServer.h>
 #include <map>
+
+using namespace std::placeholders;
 
 // Simple REST server with CRUD routes:
 //
@@ -23,53 +27,50 @@
 const char* WIFI_SSID = "ssid";
 const char* WIFI_PASSWORD = "password";
 
-#if defined(ARDUINO_ARCH_ESP8266)
-RichHttpServer<RichHttp::Generics::Configs::ESP8266Config> server(80);
-#else
-RichHttpServer<RichHttp::Generics::Configs::ESP32Config> server(80);
-#endif
+RichHttpServer<RichHttp::Generics::Configs::AsyncWebServer> server(80);
+
 std::map<size_t, String> things;
 size_t nextId = 1;
 
-void handleGetThing(const UrlTokenBindings* bindings) {
+void handleGetThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
   size_t id = atoi(bindings->get("thing_id"));
 
   if (things.count(id)) {
-    server.send(200, "application/json", things[id]);
+    request->send(200, "application/json", things[id]);
   } else {
-    server.send(404, "text/plain", "Not found");
+    request->send(404, "text/plain", "Not found");
   }
 }
 
-void handlePutThing(const UrlTokenBindings* bindings) {
+void handlePutThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
   size_t id = atoi(bindings->get("thing_id"));
 
   if (things.count(id)) {
-    things[id] = server.arg("plain");
-    server.send(200, "application/json", "true");
+    things[id] = request->arg("plain");
+    request->send(200, "application/json", "true");
   } else {
-    server.send(404, "text/plain", "Not found");
+    request->send(404, "text/plain", "Not found");
   }
 }
 
-void handleDeleteThing(const UrlTokenBindings* bindings) {
+void handleDeleteThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
   size_t id = atoi(bindings->get("thing_id"));
 
   if (things.count(id)) {
     things.erase(id);
-    server.send(200, "application/json", "true");
+    request->send(200, "application/json", "true");
   } else {
-    server.send(404, "text/plain", "Not found");
+    request->send(404, "text/plain", "Not found");
   }
 }
 
-void handleAbout() {
-  server.send(200, "text/plain", "about");
+void handleAbout(AsyncWebServerRequest* request) {
+  request->send(200, "text/plain", "about");
 }
 
-void handleAddNewThing() {
+void handleAddNewThing(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
   size_t id = nextId++;
-  const String& val = server.arg("plain");
+  const String& val = request->arg("plain");
   things[id] = val;
 
   StaticJsonDocument<100> doc;
@@ -80,10 +81,10 @@ void handleAddNewThing() {
   String response;
   serializeJson(doc, response);
 
-  server.send(200, "application/json", response);
+  request->send(200, "application/json", response);
 }
 
-void handleListThings() {
+void handleListThings(AsyncWebServerRequest* request) {
   StaticJsonDocument<1024> doc;
   JsonArray arr = doc.createNestedArray("things");
 
@@ -96,11 +97,11 @@ void handleListThings() {
   String response;
   serializeJson(doc, response);
 
-  server.send(200, "application/json", response);
+  request->send(200, "application/json", response);
 }
 
-void handleAuth() {
-  const String& val = server.arg("plain");
+void handleAuth(AsyncWebServerRequest* request) {
+  const String& val = request->arg("plain");
 
   StaticJsonDocument<100> doc;
   deserializeJson(doc, val);
@@ -113,11 +114,11 @@ void handleAuth() {
     server.disableAuthentication();
   }
 
-  server.send(200, "text/plain", "OK");
+  request->send(200, "text/plain", "OK");
 }
 
-void handleStaticResponse(const char* response) {
-  server.send(200, "text/plain", response);
+void handleStaticResponse(AsyncWebServerRequest* request, const char* response) {
+  request->send(200, "text/plain", response);
 }
 
 void setup() {
@@ -130,26 +131,22 @@ void setup() {
   // variable `thing_id`.
   server
     .buildHandler("/things/:thing_id")
-    .on(HTTP_GET, handleGetThing)
-    .on(HTTP_PUT, handlePutThing)
-    .on(HTTP_DELETE, handleDeleteThing);
+    .on(HTTP_GET, std::bind(handleGetThing, _1, _2))
+    .on(HTTP_PUT, std::bind(handlePutThing, _1, _2))
+    .on(HTTP_DELETE, std::bind(handleDeleteThing, _1, _2));
 
   server
     .buildHandler("/things")
-    .onUpload(
-      std::bind(handleStaticResponse, "OK"),
-      std::bind(handleAddNewThing)
-    )
-    .on(HTTP_GET, std::bind(handleListThings));
+    .onBody(HTTP_POST, std::bind(handleAddNewThing, _1, _3, _4, _5, _6))
+    .on(HTTP_GET, std::bind(handleListThings, _1));
 
   server
     .buildHandler("/about")
     .setDisableAuthOverride()
-    .on(HTTP_GET, std::bind(handleAbout));
+    .on(HTTP_GET, std::bind(handleAbout, _1));
 
   server.begin();
 }
 
 void loop() {
-  server.handleClient();
 }

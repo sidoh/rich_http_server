@@ -5,19 +5,42 @@
 
 #include <functional>
 
-#if defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32)
+#if (defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32)) && !defined(RICH_HTTP_ASYNC_WEBSERVER)
+
+#if defined(ARDUINO_ARCH_ESP8266)
+#include <ESP8266WebServer.h>
+#else
+#include <WebServer.h>
+#endif
+
 namespace RichHttp {
   namespace Generics {
+    template <
+      class TServerType,
+      class THandler = FunctionWrapper<void, const UrlTokenBindings*>,
+      class TBodyHandler = FunctionWrapper<void, const UrlTokenBindings*>,
+      class TUploadHandler = FunctionWrapper<void>
+    >
+    class EspressifAuthedFnBuilder;
+
     namespace Configs {
-      template <class TServerType, class TRequestHandlerClass>
+      template <
+        class TServerType,
+        class TRequestHandlerClass,
+        class THandlerFn = FunctionWrapper<void, const UrlTokenBindings*>,
+        class TUploadHandlerFn = FunctionWrapper<void>
+      >
       struct espressif_config : Generics::HandlerConfig<
         TServerType,
         HTTPMethod,
+        HTTP_ANY,
+        void*,
         void,
-        FunctionWrapper<void, const UrlTokenBindings*>,
-        FunctionWrapper<void>,
-        FunctionWrapper<void>,
-        TRequestHandlerClass
+        THandlerFn,
+        THandlerFn,
+        TUploadHandlerFn,
+        TRequestHandlerClass,
+        ::RichHttp::Generics::EspressifAuthedFnBuilder<TServerType>
       > { };
     };
 
@@ -42,12 +65,19 @@ namespace RichHttp {
             return false;
           }
 
-          char requestUriCopy[uri.length()];
+          char requestUriCopy[uri.length() + 1];
           strcpy(requestUriCopy, uri.c_str());
           TokenIterator requestTokens(requestUriCopy, uri.length(), '/');
 
           UrlTokenBindings bindings(*(this->patternTokens), requestTokens);
-          this->handlerFn(&bindings);
+
+          if (this->handlerFn) {
+            this->handlerFn(&bindings);
+          }
+
+          if (this->bodyFn) {
+            this->bodyFn(&bindings);
+          }
 
           return true;
         }
@@ -56,6 +86,40 @@ namespace RichHttp {
           if (this->uploadFn) {
             this->uploadFn();
           }
+        }
+    };
+
+    template <class TServerType, class THandler, class TBodyHandler, class TUploadHandler>
+    class EspressifAuthedFnBuilder : public AuthedFnBuilder<TServerType, THandler, TBodyHandler, TUploadHandler> {
+      public:
+        template <class... Args>
+        EspressifAuthedFnBuilder(Args... args) : AuthedFnBuilder<TServerType, THandler, TBodyHandler, TUploadHandler>(args...) {}
+
+        using fn_type = typename THandler::type;
+        using body_fn_type = typename TBodyHandler::type;
+        using upload_fn_type = typename TUploadHandler::type;
+
+        virtual fn_type buildAuthedFn(fn_type fn) override {
+          return buildAuthedHandler(fn);
+        }
+
+        virtual body_fn_type buildAuthedBodyFn(body_fn_type fn) override {
+          return buildAuthedHandler(fn);
+        }
+
+        virtual upload_fn_type buildAuthedUploadFn(upload_fn_type fn) override {
+          return buildAuthedHandler(fn);
+        }
+
+        template <class RetType, class... Args>
+        std::function<RetType(Args...)> buildAuthedHandler(std::function<RetType(Args...)> fn) {
+          return [this, fn](Args... args) {
+            if (this->authProvider->isAuthenticationEnabled() && !this->server->authenticate(this->authProvider->getUsername().c_str(), this->authProvider->getPassword().c_str())) {
+              this->server->requestAuthentication();
+            } else {
+              return fn(args...);
+            }
+          };
         }
     };
   };
