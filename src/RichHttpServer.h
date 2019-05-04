@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <ArduinoJson.h>
 
 #include <vector>
 #include <memory>
@@ -28,14 +29,6 @@ public:
   void clearBuilders() {
     handlerBuilders.clear();
   }
-
-  // Returns true if there's currently a client connected to the server.
-  // This is only necessary for the builtin webservers
-#if (defined(ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32)) && !defined(RICH_HTTP_ASYNC_WEBSERVER)
-  bool isClientConnected() {
-    return this->_currentClient && this->_currentClient.connected();
-  }
-#endif
 
 private:
   bool authEnabled;
@@ -70,7 +63,7 @@ public:
     return *this;
   }
 
-  HandlerBuilder& on(const typename Config::HttpMethod verb, typename Config::RequestHandlerFn::type fn, typename Config::BodyRequestHandlerFn::type bodyFn) {
+  HandlerBuilder<Config>& on(const typename Config::HttpMethod verb, typename Config::RequestHandlerFn::type fn, typename Config::BodyRequestHandlerFn::type bodyFn) {
     if (! this->disableAuth) {
       fn = authedFnBuilder->buildAuthedFn(fn);
       bodyFn = authedFnBuilder->buildAuthedBodyFn(bodyFn);
@@ -80,7 +73,7 @@ public:
     return *this;
   }
 
-  HandlerBuilder& onBody(const typename Config::HttpMethod verb, typename Config::BodyRequestHandlerFn::type bodyFn) {
+  HandlerBuilder<Config>& onBody(const typename Config::HttpMethod verb, typename Config::BodyRequestHandlerFn::type bodyFn) {
     if (! this->disableAuth) {
       bodyFn = authedFnBuilder->buildAuthedBodyFn(bodyFn);
     }
@@ -89,7 +82,7 @@ public:
     return *this;
   }
 
-  HandlerBuilder& onUpload(typename Config::RequestHandlerFn::type fn, typename Config::UploadRequestHandlerFn::type uploadFn) {
+  HandlerBuilder<Config>& onUpload(typename Config::RequestHandlerFn::type fn, typename Config::UploadRequestHandlerFn::type uploadFn) {
     if (! this->disableAuth) {
       fn = authedFnBuilder->buildAuthedFn(fn);
       uploadFn = authedFnBuilder->buildAuthedUploadFn(uploadFn);
@@ -99,12 +92,34 @@ public:
     return *this;
   }
 
-  HandlerBuilder& onUpload(typename Config::UploadRequestHandlerFn::type uploadFn) {
+  HandlerBuilder<Config>& onUpload(typename Config::UploadRequestHandlerFn::type uploadFn) {
     if (! this->disableAuth) {
       uploadFn = authedFnBuilder->buildAuthedUploadFn(uploadFn);
     }
 
     server.addHandler(new typename Config::RequestHandlerType(HTTP_POST, path.c_str(), nullptr, nullptr, uploadFn));
+    return *this;
+  }
+
+  HandlerBuilder<Config>& onJson(const typename Config::HttpMethod verb, typename Config::JsonRequestHandlerFn::type jsonFn) {
+    typename Config::RequestHandlerFn::type wrappedFn = authedFnBuilder->wrapJsonFn(jsonFn);
+
+    if (! this->disableAuth) {
+      wrappedFn = authedFnBuilder->buildAuthedFn(wrappedFn);
+    }
+
+    server.addHandler(new typename Config::RequestHandlerType(verb, path.c_str(), wrappedFn, nullptr, nullptr));
+    return *this;
+  }
+
+  HandlerBuilder<Config>& onJsonBody(const typename Config::HttpMethod verb, typename Config::JsonBodyRequestHandlerFn::type jsonFn) {
+    typename Config::BodyRequestHandlerFn::type wrappedFn = authedFnBuilder->wrapJsonBodyFn(jsonFn);
+
+    if (! this->disableAuth) {
+      wrappedFn = authedFnBuilder->buildAuthedFn(wrappedFn);
+    }
+
+    server.addHandler(new typename Config::RequestHandlerType(verb, path.c_str(), nullptr, wrappedFn, nullptr));
     return *this;
   }
 

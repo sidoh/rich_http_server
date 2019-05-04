@@ -6,6 +6,7 @@
 #if defined(_ESPAsyncWebServer_H_) || defined(RICH_HTTP_ASYNC_WEBSERVER)
 #include <ESPAsyncWebServer.h>
 #include <UrlTokenBindings.h>
+#include <ArduinoJson.h>
 
 #include <Arduino.h>
 #include <stddef.h>
@@ -33,25 +34,42 @@ namespace RichHttp {
         size_t,
         bool
       >;
+      using json_type = RichHttp::Generics::FunctionWrapper<
+        void,
+        AsyncWebServerRequest*,
+        const UrlTokenBindings*,
+        JsonObject&
+      >;
+      using json_body_type = RichHttp::Generics::FunctionWrapper<
+        void,
+        AsyncWebServerRequest*,
+        const UrlTokenBindings*,
+        JsonObject&,
+        const JsonObject&
+      >;
     };
 
     template <
       class TServerType = AsyncWebServer,
       class THandler = AsyncFns::handler_type,
       class TBodyHandler = AsyncFns::body_handler_type,
-      class TUploadHandler = AsyncFns::upload_handler_type
+      class TUploadHandler = AsyncFns::upload_handler_type,
+      class TJsonHandler = AsyncFns::json_type,
+      class TJsonBodyHandler = AsyncFns::json_body_type
     >
-    class AsyncAuthedFnBuilder : public AuthedFnBuilder<TServerType, THandler, TBodyHandler, TUploadHandler> {
+    class AsyncAuthedFnBuilder : public AuthedFnBuilder<TServerType, THandler, TBodyHandler, TUploadHandler, TJsonHandler, TJsonBodyHandler> {
       public:
 
         template <class... Args>
         AsyncAuthedFnBuilder(Args... args)
-          : AuthedFnBuilder<TServerType, THandler, TBodyHandler, TUploadHandler>
+          : AuthedFnBuilder<TServerType, THandler, TBodyHandler, TUploadHandler, TJsonHandler, TJsonBodyHandler>
         (args...) {}
 
         using fn_type = typename THandler::type;
         using body_fn_type = typename TBodyHandler::type;
         using upload_fn_type = typename TUploadHandler::type;
+        using json_fn_type = typename TJsonHandler::type;
+        using json_body_fn_type = typename TJsonBodyHandler::type;
 
         virtual fn_type buildAuthedFn(fn_type fn) override {
           return buildAuthedHandler(fn);
@@ -62,6 +80,14 @@ namespace RichHttp {
         }
 
         virtual upload_fn_type buildAuthedUploadFn(upload_fn_type fn) override {
+          return buildAuthedHandler(fn);
+        }
+
+        virtual json_fn_type buildAuthedJsonFn(json_fn_type fn) override {
+          return buildAuthedHandler(fn);
+        }
+
+        virtual json_body_fn_type buildAuthedJsonBodyFn(json_body_fn_type fn) override {
           return buildAuthedHandler(fn);
         }
 
@@ -91,6 +117,8 @@ namespace RichHttp {
         typename AsyncFns::handler_type,
         typename AsyncFns::body_handler_type,
         typename AsyncFns::upload_handler_type,
+        typename AsyncFns::json_type,
+        typename AsyncFns::json_body_type,
         ::RichHttp::Generics::AsyncRequestHandler,
         ::RichHttp::Generics::AsyncAuthedFnBuilder<>
       >;
@@ -150,6 +178,19 @@ namespace RichHttp {
           }
         }
     };
+
+    // class JsonAsyncRequestHandler : public ::RichHttp::Generics::BaseRequestHandler<Configs::AsyncWebServer, ::AsyncWebHandler> {
+    //   public:
+
+    //     template <class... Args>
+    //     JsonAsyncRequestHandler(Args... args)
+    //       : AsyncRequestHandler(args...)
+    //     (args...) { }
+
+    //     virtual void handleRequest(AsyncWebServerRequest* request) override {
+    //       forwardToHandler<>(this->handlerFn, request);
+    //     }
+    // };
   };
 };
 #endif

@@ -2,11 +2,23 @@
 
 #include <UrlTokenBindings.h>
 #include <TokenIterator.h>
+#include <ArduinoJson.h>
 
 #include <functional>
 #include <memory>
 
+#ifndef RICH_HTTP_REQUEST_BUFFER_SIZE
+#define RICH_HTTP_REQUEST_BUFFER_SIZE 1024
+#endif
+
+#ifndef RICH_HTTP_RESPONSE_BUFFER_SIZE
+#define RICH_HTTP_RESPONSE_BUFFER_SIZE 1024
+#endif
+
 namespace RichHttp {
+  static const char CONTENT_TYPE_JSON[] PROGMEM = "application/json";
+  static const char CONTENT_TYPE_TEXT[] PROGMEM = "text/plain";
+
   namespace Generics {
     template <class ReturnType, class... TArgs>
     struct FunctionWrapper {
@@ -21,6 +33,8 @@ namespace RichHttp {
       class TRequestHandler,
       class TBodyRequestHandler,
       class TUploadRequestHandler,
+      class TJsonRequestHandler,
+      class TJsonBodyRequestHandler,
       class TRequestHandlerClass,
       class TAuthedFnBuilder
     >
@@ -32,6 +46,8 @@ namespace RichHttp {
       using RequestHandlerFn = TRequestHandler;
       using BodyRequestHandlerFn = TBodyRequestHandler;
       using UploadRequestHandlerFn = TUploadRequestHandler;
+      using JsonRequestHandlerFn = TJsonRequestHandler;
+      using JsonBodyRequestHandlerFn = TJsonBodyRequestHandler;
       using RequestHandlerType = TRequestHandlerClass;
       using AuthedFnBuilderType = TAuthedFnBuilder;
     };
@@ -49,7 +65,9 @@ namespace RichHttp {
       class TServerType,
       class TMethodWrapper,
       class TBodyMethodWrapper,
-      class TUploadMethodWrapper
+      class TUploadMethodWrapper,
+      class TJsonMethodWrapper,
+      class TJsonBodyMethodWrapper
     >
     class AuthedFnBuilder {
       public:
@@ -61,6 +79,9 @@ namespace RichHttp {
         virtual typename TMethodWrapper::type buildAuthedFn(typename TMethodWrapper::type) = 0;
         virtual typename TBodyMethodWrapper::type buildAuthedBodyFn(typename TBodyMethodWrapper::type) = 0;
         virtual typename TUploadMethodWrapper::type buildAuthedUploadFn(typename TUploadMethodWrapper::type) = 0;
+
+        virtual typename TMethodWrapper::type wrapJsonFn(typename TJsonMethodWrapper::type) = 0;
+        virtual typename TBodyMethodWrapper::type wrapJsonBodyFn(typename TJsonBodyMethodWrapper::type) = 0;
 
       protected:
         TServerType* server;

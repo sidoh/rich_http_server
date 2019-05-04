@@ -4,6 +4,9 @@
 #include <UrlTokenBindings.h>
 #include <RichHttpServer.h>
 #include <map>
+#include <functional>
+
+using namespace std::placeholders;
 
 // Simple REST server with CRUD routes:
 //
@@ -39,40 +42,58 @@ RichHttpServer<RichHttp::Generics::Configs::ESP32Config> server(80);
 std::map<size_t, String> things;
 size_t nextId = 1;
 
-void handleGetThing(const UrlTokenBindings* bindings) {
+void handleGetThing(const UrlTokenBindings* bindings, RichHttp::Response& response) {
   size_t id = atoi(bindings->get("thing_id"));
 
   if (things.count(id)) {
-    server.send(200, "application/json", things[id]);
+    JsonObject thing = response.json.createNestedObject("thing");
+    thing["id"] = id;
+    thing["val"] = things[id];
+
+    // server.send(200, "application/json", things[id]);
   } else {
     server.send(404, "text/plain", "Not found");
   }
 }
 
-void handlePutThing(const UrlTokenBindings* bindings) {
+void handlePutThing(const UrlTokenBindings* bindings, JsonDocument& request, RichHttp::Response& response) {
   size_t id = atoi(bindings->get("thing_id"));
 
   if (things.count(id)) {
-    things[id] = server.arg("plain");
-    server.send(200, "application/json", "true");
+    JsonObject req = request.as<JsonObject>();
+    if (req.containsKey("thing")) {
+      req = req["thing"];
+      things[id] = req["val"].as<const char*>();
+      response.json["success"] = true;
+    } else {
+      response.json["success"] = false;
+      response.json["error"] = "Request object must contain key `thing'.";
+      response.setCode(400);
+    }
   } else {
-    server.send(404, "text/plain", "Not found");
+    response.json["success"] = false;
+    response.json["error"] = "Not found";
+    response.setCode(404);
   }
 }
 
-void handleDeleteThing(const UrlTokenBindings* bindings) {
+void handleDeleteThing(const UrlTokenBindings* bindings, RichHttp::Response& response) {
   size_t id = atoi(bindings->get("thing_id"));
 
   if (things.count(id)) {
     things.erase(id);
     server.send(200, "application/json", "true");
+    response.json["success"] = true;
   } else {
-    server.send(404, "text/plain", "Not found");
+    response.json["success"] = false;
+    response.json["error"] = "Not found";
+    response.setCode(404);
   }
 }
 
-void handleAbout() {
-  server.send(200, "text/plain", "about");
+void handleAbout(RichHttp::Response& response) {
+  response.json["ip_address"] = WiFi.localIP().toString();
+  response.json["free_heap"] = ESP.getFreeHeap();
 }
 
 void handleAddNewThing() {
@@ -107,13 +128,8 @@ void handleListThings() {
   server.send(200, "application/json", response);
 }
 
-void handleAuth() {
-  const String& val = server.arg("plain");
-
-  StaticJsonDocument<100> doc;
-  deserializeJson(doc, val);
-
-  JsonObject obj = doc.as<JsonObject>();
+void handleAuth(JsonDocument& request, RichHttp::Response& response) {
+  JsonObject obj = request.as<JsonObject>();
 
   if (obj.containsKey("username") && obj.containsKey("password")) {
     server.requireAuthentication(obj["username"], obj["password"]);
@@ -121,7 +137,7 @@ void handleAuth() {
     server.disableAuthentication();
   }
 
-  server.send(200, "text/plain", "OK");
+  response.json["success"] = true;
 }
 
 void handleStaticResponse(const char* response) {
@@ -138,26 +154,23 @@ void setup() {
   // variable `thing_id`.
   server
     .buildHandler("/things/:thing_id")
-    .on(HTTP_GET, handleGetThing)
-    .on(HTTP_PUT, handlePutThing)
-    .on(HTTP_DELETE, handleDeleteThing);
+    .onJson(HTTP_GET, handleGetThing)
+    .onJsonBody(HTTP_PUT, handlePutThing)
+    .onJson(HTTP_DELETE, handleDeleteThing);
 
   server
     .buildHandler("/things")
-    .onUpload(
-      std::bind(handleStaticResponse, "OK"),
-      std::bind(handleAddNewThing)
-    )
+    .onBody(HTTP_POST, std::bind(handleAddNewThing))
     .on(HTTP_GET, std::bind(handleListThings));
 
   server
     .buildHandler("/about")
     .setDisableAuthOverride()
-    .on(HTTP_GET, std::bind(handleAbout));
+    .onJson(HTTP_GET, std::bind(handleAbout, _2));
 
   server
     .buildHandler("/sys/auth")
-    .onBody(HTTP_PUT, std::bind(handleAuth));
+    .onJsonBody(HTTP_PUT, std::bind(handleAuth, _2, _3));
 
   server.clearBuilders();
   server.begin();
