@@ -40,83 +40,84 @@ RichHttpServer<RichHttp::Generics::Configs::AsyncWebServer> server(80);
 std::map<size_t, String> things;
 size_t nextId = 1;
 
-void handleGetThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
+void handleGetThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings, RichHttp::Response& response) {
   size_t id = atoi(bindings->get("thing_id"));
 
   if (things.count(id)) {
-    request->send(200, "application/json", things[id]);
+    JsonObject thing = response.json.createNestedObject("thing");
+    thing["id"] = id;
+    thing["val"] = things[id];
   } else {
-    request->send(404, "text/plain", "Not found");
+    response.setCode(404);
+    response.json["error"] = "Not found";
   }
 }
 
-void handlePutThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings, uint8_t* data, size_t len, size_t index, size_t total) {
+void handlePutThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings, JsonDocument& requestBody, RichHttp::Response& response) {
   size_t id = atoi(bindings->get("thing_id"));
 
   if (things.count(id)) {
-    things[id] = String(reinterpret_cast<char*>(data));
-    request->send(200, "application/json", "true");
+    JsonObject req = requestBody.as<JsonObject>();
+    if (req.containsKey("thing")) {
+      req = req["thing"];
+      things[id] = req["val"].as<const char*>();
+      response.json["success"] = true;
+    } else {
+      response.json["success"] = false;
+      response.json["error"] = "Request object must contain key `thing'.";
+      response.setCode(400);
+    }
   } else {
-    request->send(404, "text/plain", "Not found");
+    response.json["success"] = false;
+    response.json["error"] = "Not found";
+    response.setCode(404);
   }
 }
 
-void handleDeleteThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
+void handleDeleteThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings, RichHttp::Response& response) {
   size_t id = atoi(bindings->get("thing_id"));
 
   if (things.count(id)) {
     things.erase(id);
-    request->send(200, "application/json", "true");
+    response.json["success"] = true;
   } else {
-    request->send(404, "text/plain", "Not found");
+    response.setCode(404);
+    response.json["error"] = "Not found";
   }
 }
 
-void handleAbout(AsyncWebServerRequest* request) {
-  request->send(200, "text/plain", "about");
+void handleAbout(AsyncWebServerRequest* request, RichHttp::Response& response) {
+  response.json["ip_address"] = WiFi.localIP().toString();
+  response.json["free_heap"] = ESP.getFreeHeap();
 }
 
-void handleAddNewThing(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-  char body[len+1];
-  strncpy(body, reinterpret_cast<char*>(data), len);
-  body[len] = 0;
-
+void handleAddNewThing(AsyncWebServerRequest* request, JsonDocument& body, RichHttp::Response& response) {
   size_t id = nextId++;
-  const String& val = String(body);
+  String val;
+
+  if (! body["thing"].isNull()) {
+    val = body["thing"]["val"].as<char*>();
+  }
+
   things[id] = val;
 
-  StaticJsonDocument<100> doc;
-  JsonObject obj = doc.createNestedObject("thing");
+  JsonObject obj = response.json.createNestedObject("thing");
   obj["id"] = id;
   obj["val"] = val;
-
-  String response;
-  serializeJson(doc, response);
-
-  request->send(200, "application/json", response);
 }
 
-void handleListThings(AsyncWebServerRequest* request) {
-  StaticJsonDocument<1024> doc;
-  JsonArray arr = doc.createNestedArray("things");
+void handleListThings(AsyncWebServerRequest* request, RichHttp::Response& response) {
+  JsonArray arr = response.json.createNestedArray("things");
 
   for (std::map<size_t, String>::iterator it = things.begin(); it != things.end(); ++it) {
     JsonObject obj = arr.createNestedObject();
     obj["id"] = it->first;
     obj["val"] = it->second;
   }
-
-  String response;
-  serializeJson(doc, response);
-
-  request->send(200, "application/json", response);
 }
 
-void handleAuth(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
-  StaticJsonDocument<100> doc;
-  deserializeJson(doc, data);
-
-  JsonObject obj = doc.as<JsonObject>();
+void handleAuth(AsyncWebServerRequest* request, JsonDocument& body, RichHttp::Response& response) {
+  JsonObject obj = body.as<JsonObject>();
 
   if (obj.containsKey("username") && obj.containsKey("password")) {
     server.requireAuthentication(obj["username"], obj["password"]);
@@ -124,7 +125,7 @@ void handleAuth(AsyncWebServerRequest* request, uint8_t* data, size_t len, size_
     server.disableAuthentication();
   }
 
-  request->send(200, "text/plain", "OK");
+  response.json["success"] = true;
 }
 
 void handleStaticResponse(AsyncWebServerRequest* request, const char* response) {
@@ -141,23 +142,23 @@ void setup() {
   // variable `thing_id`.
   server
     .buildHandler("/things/:thing_id")
-    .on(HTTP_GET, std::bind(handleGetThing, _1, _2))
-    .onBody(HTTP_PUT, std::bind(handlePutThing, _1, _2, _3, _4, _5, _6))
-    .on(HTTP_DELETE, std::bind(handleDeleteThing, _1, _2));
+    .onJson(HTTP_GET, std::bind(handleGetThing, _1, _2, _3))
+    .onJsonBody(HTTP_PUT, std::bind(handlePutThing, _1, _2, _3, _4))
+    .onJson(HTTP_DELETE, std::bind(handleDeleteThing, _1, _2, _3));
 
   server
     .buildHandler("/things")
-    .onBody(HTTP_POST, std::bind(handleAddNewThing, _1, _3, _4, _5, _6))
-    .on(HTTP_GET, std::bind(handleListThings, _1));
+    .onJsonBody(HTTP_POST, std::bind(handleAddNewThing, _1, _3, _4))
+    .onJson(HTTP_GET, std::bind(handleListThings, _1, _3));
 
   server
     .buildHandler("/about")
     .setDisableAuthOverride()
-    .on(HTTP_GET, std::bind(handleAbout, _1));
+    .onJson(HTTP_GET, std::bind(handleAbout, _1, _3));
 
   server
     .buildHandler("/sys/auth")
-    .onBody(HTTP_PUT, std::bind(handleAuth, _1, _3, _4, _5, _6));
+    .onJsonBody(HTTP_PUT, std::bind(handleAuth, _1, _3, _4));
 
   server.clearBuilders();
 

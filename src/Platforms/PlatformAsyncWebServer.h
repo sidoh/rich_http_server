@@ -38,14 +38,14 @@ namespace RichHttp {
         void,
         AsyncWebServerRequest*,
         const UrlTokenBindings*,
-        JsonObject&
+        RichHttp::Response&
       >;
       using json_body_type = RichHttp::Generics::FunctionWrapper<
         void,
         AsyncWebServerRequest*,
         const UrlTokenBindings*,
-        JsonObject&,
-        const JsonObject&
+        JsonDocument&,
+        RichHttp::Response&
       >;
     };
 
@@ -83,12 +83,53 @@ namespace RichHttp {
           return buildAuthedHandler(fn);
         }
 
-        virtual json_fn_type buildAuthedJsonFn(json_fn_type fn) override {
-          return buildAuthedHandler(fn);
+        virtual fn_type wrapJsonFn(json_fn_type fn) override {
+          return [this, fn](AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
+            DynamicJsonDocument responseDoc(RICH_HTTP_RESPONSE_BUFFER_SIZE);
+            RichHttp::Response response(responseDoc);
+
+            fn(request, bindings, response);
+
+            sendResponse(request, response);
+          };
         }
 
-        virtual json_body_fn_type buildAuthedJsonBodyFn(json_body_fn_type fn) override {
-          return buildAuthedHandler(fn);
+        virtual body_fn_type wrapJsonBodyFn(json_body_fn_type fn) override {
+          return [this, fn](
+            AsyncWebServerRequest* request,
+            const UrlTokenBindings* bindings,
+            uint8_t* data,
+            size_t len,
+            size_t index,
+            size_t total
+          ) {
+            DynamicJsonDocument requestDoc(RICH_HTTP_REQUEST_BUFFER_SIZE);
+
+            auto error = deserializeJson(requestDoc, data, len);
+
+            if (error) {
+              request->send(400, ::RichHttp::CONTENT_TYPE_TEXT, error.c_str());
+              Serial.printf_P(PSTR("Error parsing client-sent JSON: %s\n"), error.c_str());
+              return;
+            }
+
+            DynamicJsonDocument responseDoc(RICH_HTTP_RESPONSE_BUFFER_SIZE);
+            RichHttp::Response response(responseDoc);
+
+            fn(request, bindings, requestDoc, response);
+
+            sendResponse(request, response);
+          };
+        }
+
+        void sendResponse(AsyncWebServerRequest* request, RichHttp::Response& response) {
+          if (response.isSetBody()) {
+            request->send(response.getCode(), response.getBodyType(), response.getBody());
+          } else {
+            String body;
+            serializeJson(response.json, body);
+            request->send(response.getCode(), ::RichHttp::CONTENT_TYPE_JSON, body);
+          }
         }
 
         template <class RetType, class... Args>

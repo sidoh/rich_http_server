@@ -116,7 +116,7 @@ public:
     typename Config::BodyRequestHandlerFn::type wrappedFn = authedFnBuilder->wrapJsonBodyFn(jsonFn);
 
     if (! this->disableAuth) {
-      wrappedFn = authedFnBuilder->buildAuthedFn(wrappedFn);
+      wrappedFn = authedFnBuilder->buildAuthedBodyFn(wrappedFn);
     }
 
     server.addHandler(new typename Config::RequestHandlerType(verb, path.c_str(), nullptr, wrappedFn, nullptr));
