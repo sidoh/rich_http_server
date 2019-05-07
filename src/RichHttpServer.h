@@ -55,25 +55,6 @@ public:
 
   HandlerBuilder<Config>& handleOTA() {
     return on(HTTP_POST, Config::OtaSuccessHandlerFn, Config::OtaHandlerFn);
-    // typename Config::BodyRequestHandlerFn::type wrappedFn = fnWrapperBuilder->wrapContextFn(Config::OtaHandlerFn, true);
-    // typename Config::UploadRequestHandlerFn::type wrappedUploadFn = fnWrapperBuilder->wrapUploadContextFn(Config::OtaSuccessHandlerFn);
-
-    // if (! this->disableAuth) {
-    //   wrappedFn = fnWrapperBuilder->buildAuthedBodyFn(wrappedFn);
-    //   wrappedUploadFn = fnWrapperBuilder->buildAuthedUploadFn(wrappedUploadFn);
-    // }
-
-    // server.addHandler(
-    //   new typename Config::RequestHandlerType(
-    //     HTTP_POST,
-    //     path.c_str(),
-    //     nullptr,
-    //     wrappedFn,
-    //     wrappedUploadFn
-    //   )
-    // );
-
-    // return *this;
   }
 
   // Add handlers to the attached server.
