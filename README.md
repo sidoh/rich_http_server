@@ -25,6 +25,9 @@ lib_deps =
   ; Use most recent published version
   RichHttpServer
 
+  ; Use latest patch for given version
+  RichHttpServer@~2.0.0
+
   ; Use branch from github
   ; sidoh/rich_http_server#branch
 ```
@@ -41,39 +44,56 @@ The base object the user interacts with is `RichHttpServer`.  It is templated wi
 #include <RichHttpServer.h>
 #include <functional>
 
-// Use the builtin server (ESP8266WebServer for ESP8266, WebServer for ESP32).
-// Listen on port 80.
-RichHttpServer<RichHttp::Configs::Generics::EspressifBuiltin> server(80);
-
 using namespace::placeholders;
 
+// Define shorthand for common types
+using RichHttpConfig = RichHttp::Generics::Configs::EspressifBuiltin;
+using RequestContext = RichHttpConfig::RequestContextType;
+
+// Use the builtin server (ESP8266WebServer for ESP8266, WebServer for ESP32).
+// Listen on port 80.
+RichHttpServer<RichHttpConfig> server(80);
+
 // Handlers for normal routes follow the same structure
-void handleGetAbout() {
-  server.send(200, "text/plain", "hello world");
+void handleGetAbout(RequestContext& request) {
+  // Respond with JSON body:
+  //   {"message":"hello world"}
+  request.response.json["message"] = "hello world";
 }
 
 // Handlers for routes with variables can be passed a `UrlTokenBindings` object
 // which can be used to extract bindings to the variables
-void handleGetThing(const UrlTokenBindings* bindings) {
-  String response = "thing ID = " + String(bindings.get("thing_id"));
-  server.send(200, "text/plain", response);
+void handleGetThing(RequestContext& request) {
+  char buffer[100];
+  sprintf("Thing ID is: %s\n", buffer, request.pathVariables.get("thing_id"));
+
+  // Respond with JSON body:
+  //   {"message":"Thing ID is..."}
+  request.response.json["message"] = buffer;
 }
 
 // Handlers for routes with variables can be passed a `UrlTokenBindings` object
 // which can be used to extract bindings to the variables
-void handlePutThing(const UrlTokenBindings* bindings) {
-  String body = server.args("plain");
-  String response = "thing ID = " + String(bindings.get("thing_id")) + ", body was = " + body;
+void handlePutThing(RequestContext& request) {
+  JsonObject body = request.getJsonBody().as<JsonObject>();
 
-  server.send(200, "text/plain", response);
+  if (body.isNull()) {
+    request.response.setCode(400);
+    request.response.json["error"] = F("Invalid JSON.  Must be an object.");
+    return;
+  }
+
+  char buffer[100];
+  sprintf("Thing ID is: %s\nBody is: %s\n", request.pathVariables.get("thing_id"), request.getBody());
+
+  request.response.json["message"] = buffer;
 }
 
 void setup() {
   // Create some routes
   server
     .buildHandler("/about")
-    // std::bind removes the need to take in a dummy UrlTokenBindings parameter
-    .on(HTTP_GET, std::bind(handleGetAbout));
+    .on(HTTP_GET, handleGetAbout);
 
   server
     .buildHandler("/things/:thing_id")
@@ -95,57 +115,18 @@ void loop() {
 
 Note that you may need to define the compiler flag `RICH_HTTP_ASYNC_WEBSERVER` to prevent conflicts between the builtin and async servers (they both define globals with the same name).
 
+The only meaningful change to the above sketch for the builtin webserver is to use different generics:
+
 ```c++
 #include <ESPAsyncWebServer.h>
 #include <RichHttpServer.h>
 
+using RichHttpConfig = RichHttp::Generics::Configs::AsyncWebServer;
+using RequestContext = RichHttpConfig::RequestContextType;
+
 // Use ESPAsyncWebServer
 // Listen on port 80.
-RichHttpServer<RichHttp::Configs::Generics::AsyncWebServer> server(80);
-
-using namespace::placeholders;
-
-// Handlers for normal routes follow the same structure
-void handleGetAbout(AsyncWebServerRequest* request) {
-  server.send(200, "text/plain", "hello world");
-}
-
-// Handlers for routes with variables can be passed a `UrlTokenBindings` object
-// which can be used to extract bindings to the variables
-void handleGetThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
-  String response = "thing ID = " + String(bindings.get("thing_id"));
-  server.send(200, "text/plain", response);
-}
-
-// Handlers for routes with variables can be passed a `UrlTokenBindings` object
-// which can be used to extract bindings to the variables
-void handlePutThing(AsyncWebServerRequest* request, const UrlTokenBindings* bindings, uint8_t* data, size_t len, size_t index, size_t total) {
-  String body(reinterpret_cast<char*>(data));
-  String response = "thing ID = " + String(bindings.get("thing_id")) + ", body was = " + body;
-
-  server.send(200, "text/plain", response);
-}
-
-void setup() {
-  // Create some routes
-  server
-    .buildHandler("/about")
-    .on(HTTP_GET, std::bind(handleGetAbout, _1));
-
-  server
-    .buildHandler("/things/:thing_id")
-    .on(HTTP_GET, std::bind(handleGetThing, _1, _2))
-    .on(HTTP_PUT, std::bind(handlePutThing, _1, _2, _3, _4, _5));
-
-  // Builders are cached and should be cleared after we're finished
-  server.clearBuilders();
-
-  server.begin();
-}
-
-void loop() {
-  server.handleClient();
-}
+RichHttpServer<RichHttpConfig> server(80);
 ```
 
 ## Development
