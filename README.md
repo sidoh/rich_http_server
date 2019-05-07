@@ -129,6 +129,14 @@ using RequestContext = RichHttpConfig::RequestContextType;
 RichHttpServer<RichHttpConfig> server(80);
 ```
 
+The rest of the handlers are the same.  The raw `AsyncWebServerRequest` pointer is provided in the `RequestContext` parameter:
+
+```c++
+void myHandler(RequestContext& request) {
+  AsyncWebServerRequest* rawRequest = request.rawRequest;
+}
+```
+
 ## Development
 
 Build examples with, for instance:
