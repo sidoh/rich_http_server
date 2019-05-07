@@ -7,6 +7,10 @@
 #include <RichHttpServer.h>
 #include <map>
 
+#if defined(ESP32)
+#include <SPIFFS.h>
+#endif
+
 using namespace std::placeholders;
 
 // Simple REST server with CRUD routes:
@@ -138,12 +142,32 @@ void handleAuth(RequestContext& request) {
 void handleListFiles(RequestContext& request) {
   JsonArray files = request.response.json.to<JsonArray>();
 
+#if defined(ESP8266)
   Dir dir = SPIFFS.openDir("/files/");
+
   while (dir.next()) {
     JsonObject file = files.createNestedObject();
     file["name"] = dir.fileName();
     file["size"] = dir.fileSize();
   }
+#elif defined(ESP32)
+  File dir = SPIFFS.open("/files/");
+
+  if (!dir || !dir.isDirectory()) {
+    Serial.print(F("Path is not a directory"));
+
+    request.response.setCode(500);
+    request.response.json["error"] = F("Expected path to be a directory, but wasn't");
+    return;
+  }
+
+  while (File dirFile = dir.openNextFile()) {
+    JsonObject file = files.createNestedObject();
+
+    file["name"] = String(dirFile.name());
+    file["size"] = dirFile.size();
+  }
+#endif
 }
 
 void handleReadFile(RequestContext& request) {

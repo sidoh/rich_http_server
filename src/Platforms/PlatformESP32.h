@@ -14,8 +14,8 @@ namespace RichHttp {
 
     namespace Configs {
       struct ESP32Config : espressif_config<WebServer, ESP32RequestHandler> {
-        using _fn_type = BuiltinFns::context_fn_type<ESP32WebServer>::def::type;
-        using _context_type = EspressifRequestContext<ESP32WebServer>;
+        using _fn_type = BuiltinFns::context_fn_type<WebServer>::def::type;
+        using _context_type = EspressifRequestContext<WebServer>;
 
         static const _fn_type OtaHandlerFn;
         static const _fn_type OtaSuccessHandlerFn;
