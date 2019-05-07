@@ -13,7 +13,13 @@ namespace RichHttp {
     class ESP32RequestHandler;
 
     namespace Configs {
-      using ESP32Config = espressif_config<WebServer, ESP32RequestHandler>;
+      struct ESP32Config : espressif_config<WebServer, ESP32RequestHandler> {
+        using _fn_type = BuiltinFns::context_fn_type<ESP32WebServer>::def::type;
+        using _context_type = EspressifRequestContext<ESP32WebServer>;
+
+        static const _fn_type OtaHandlerFn;
+        static const _fn_type OtaSuccessHandlerFn;
+      };
       using EspressifBuiltin = ESP32Config;
     };
 

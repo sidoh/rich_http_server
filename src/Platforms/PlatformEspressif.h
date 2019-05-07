@@ -17,22 +17,32 @@
 
 namespace RichHttp {
   namespace Generics {
+    template <class TServer>
+    class EspressifRequestContext;
+
     namespace BuiltinFns {
-      using base_type = FunctionWrapper<void>;
       using handler_type = FunctionWrapper<void, const UrlTokenBindings*>;
-      using json_type = FunctionWrapper<void, const UrlTokenBindings*, RichHttp::Response&>;
-      using json_body_type = FunctionWrapper<void, const UrlTokenBindings*, JsonDocument&, RichHttp::Response&>;
+
+      template <class TServer>
+      struct context_fn_type {
+        using def = FunctionWrapper<void, EspressifRequestContext<TServer>&>;
+      };
+
+      template <class TServer>
+      struct upload_context_fn_type {
+        using def = FunctionWrapper<void, EspressifRequestContext<TServer>&>;
+      };
     };
 
     template <
       class TServerType,
       class THandler = BuiltinFns::handler_type,
       class TBodyHandler = BuiltinFns::handler_type,
-      class TUploadHandler = BuiltinFns::base_type,
-      class TJsonHandler = BuiltinFns::json_type,
-      class TJsonBodyHandler = BuiltinFns::json_body_type
+      class TUploadHandler = BuiltinFns::handler_type,
+      class TContextHandler = typename BuiltinFns::context_fn_type<TServerType>::def,
+      class TUploadContextHandler = typename BuiltinFns::upload_context_fn_type<TServerType>::def
     >
-    class EspressifAuthedFnBuilder;
+    class EspressifHandlerFnWrapperBuilder;
 
     namespace Configs {
       template <
@@ -46,11 +56,12 @@ namespace RichHttp {
         void,
         typename BuiltinFns::handler_type,
         typename BuiltinFns::handler_type,
-        typename BuiltinFns::base_type,
-        typename BuiltinFns::json_type,
-        typename BuiltinFns::json_body_type,
+        typename BuiltinFns::handler_type,
+        typename BuiltinFns::context_fn_type<TServerType>::def,
+        typename BuiltinFns::upload_context_fn_type<TServerType>::def,
         TRequestHandlerClass,
-        ::RichHttp::Generics::EspressifAuthedFnBuilder<TServerType>
+        ::RichHttp::Generics::EspressifHandlerFnWrapperBuilder<TServerType>,
+        EspressifRequestContext<TServerType>
       > { };
     };
 
@@ -94,7 +105,13 @@ namespace RichHttp {
 
         virtual void upload(typename TConfig::ServerType& server, String uri, HTTPUpload& upload) override {
           if (this->uploadFn) {
-            this->uploadFn();
+            char requestUriCopy[uri.length() + 1];
+            strcpy(requestUriCopy, uri.c_str());
+            TokenIterator requestTokens(requestUriCopy, uri.length(), '/');
+
+            UrlTokenBindings bindings(*(this->patternTokens), requestTokens);
+
+            this->uploadFn(&bindings);
           }
         }
     };
@@ -104,29 +121,36 @@ namespace RichHttp {
       class THandler,
       class TBodyHandler,
       class TUploadHandler,
-      class TJsonHandler,
-      class TJsonBodyHandler
+      class TContextHandler,
+      class TUploadContextHandler
     >
-    class EspressifAuthedFnBuilder
-      : public AuthedFnBuilder<TServerType, THandler, TBodyHandler, TUploadHandler, TJsonHandler, TJsonBodyHandler>
+    class EspressifHandlerFnWrapperBuilder
+      : public HandlerFnWrapperBuilder<
+          TServerType,
+          THandler,
+          TBodyHandler,
+          TUploadHandler,
+          TContextHandler,
+          TUploadContextHandler
+        >
     {
       public:
         template <class... Args>
-        EspressifAuthedFnBuilder(Args... args)
-          : AuthedFnBuilder<
+        EspressifHandlerFnWrapperBuilder(Args... args)
+          : HandlerFnWrapperBuilder<
               TServerType,
               THandler,
               TBodyHandler,
               TUploadHandler,
-              TJsonHandler,
-              TJsonBodyHandler
+              TContextHandler,
+              TUploadContextHandler
             >(args...) {}
 
         using fn_type = typename THandler::type;
         using body_fn_type = typename TBodyHandler::type;
         using upload_fn_type = typename TUploadHandler::type;
-        using json_fn_type = typename TJsonHandler::type;
-        using json_body_fn_type = typename TJsonBodyHandler::type;
+        using context_fn_type = typename TContextHandler::type;
+        using upload_context_fn_type = typename TUploadContextHandler::type;
 
         virtual fn_type buildAuthedFn(fn_type fn) override {
           return buildAuthedHandler(fn);
@@ -140,35 +164,39 @@ namespace RichHttp {
           return buildAuthedHandler(fn);
         }
 
-        virtual fn_type wrapJsonFn(json_fn_type fn) override {
-          return [this, fn](const UrlTokenBindings* bindings) {
+        virtual body_fn_type wrapContextFn(context_fn_type fn, bool disableBody) override {
+          return [this, fn, disableBody](const UrlTokenBindings* bindings) {
             DynamicJsonDocument responseDoc(RICH_HTTP_RESPONSE_BUFFER_SIZE);
-            RichHttp::Response response(responseDoc);
+            Response response(responseDoc);
 
-            fn(bindings, response);
+            bool hasBody = !disableBody && this->server->hasArg("plain");
+
+            EspressifRequestContext<TServerType> context(
+              *this->server,
+              response,
+              *bindings,
+              hasBody
+            );
+
+            fn(context);
 
             sendResponse(response);
           };
         }
 
-        virtual body_fn_type wrapJsonBodyFn(json_body_fn_type fn) override {
+        virtual upload_fn_type wrapUploadContextFn(upload_context_fn_type fn) override {
           return [this, fn](const UrlTokenBindings* bindings) {
-            DynamicJsonDocument requestDoc(RICH_HTTP_REQUEST_BUFFER_SIZE);
-
-            auto error = deserializeJson(requestDoc, this->server->arg("plain"));
-
-            if (error) {
-              this->server->setContentLength(strlen(error.c_str()));
-              this->server->send_P(400, ::RichHttp::CONTENT_TYPE_TEXT, PSTR(""));
-              this->server->sendContent(error.c_str());
-              Serial.printf_P(PSTR("Error parsing client-sent JSON: %s\n"), error.c_str());
-              return;
-            }
-
             DynamicJsonDocument responseDoc(RICH_HTTP_RESPONSE_BUFFER_SIZE);
-            RichHttp::Response response(responseDoc);
+            Response response(responseDoc);
 
-            fn(bindings, requestDoc, response);
+            EspressifRequestContext<TServerType> context(
+              *this->server,
+              response,
+              *bindings,
+              false
+            );
+
+            fn(context);
 
             sendResponse(response);
           };
@@ -177,7 +205,7 @@ namespace RichHttp {
         void sendResponse(RichHttp::Response& response) {
           if (response.isSetBody()) {
             this->server->send(response.getCode(), response.getBodyType(), response.getBody());
-          } else {
+          } else if (! response.json.isNull()) {
             this->server->setContentLength(measureJson(response.json));
             this->server->send_P(response.getCode(), ::RichHttp::CONTENT_TYPE_JSON, PSTR(""));
 
@@ -189,13 +217,46 @@ namespace RichHttp {
         template <class RetType, class... Args>
         std::function<RetType(Args...)> buildAuthedHandler(std::function<RetType(Args...)> fn) {
           return [this, fn](Args... args) {
-            if (this->authProvider->isAuthenticationEnabled() && !this->server->authenticate(this->authProvider->getUsername().c_str(), this->authProvider->getPassword().c_str())) {
+            if (this->authProvider->isAuthenticationEnabled()
+              && !this->server->authenticate(this->authProvider->getUsername().c_str(), this->authProvider->getPassword().c_str()))
+            {
               this->server->requestAuthentication();
             } else {
               return fn(args...);
             }
           };
         }
+    };
+
+    template <class TServer>
+    class EspressifRequestContext : public RequestContext {
+      public:
+        template <class... Args>
+        EspressifRequestContext(TServer& server, Response& response, Args... args)
+          : RequestContext(response, args...)
+          , server(server)
+        { }
+
+        virtual std::shared_ptr<JsonDocument> parseJsonBody() override {
+          std::shared_ptr<JsonDocument> jsonPtr = std::make_shared<DynamicJsonDocument>(RICH_HTTP_RESPONSE_BUFFER_SIZE);
+          auto error = deserializeJson(*jsonPtr, this->getBody());
+
+          if (error) {
+            JsonObject err = response.json.createNestedObject("error");
+            err["message"] = "Error parsing JSON";
+            err["id"] = error.c_str();
+            response.setCode(400);
+          }
+
+          return jsonPtr;
+        }
+
+        virtual std::pair<const char*, size_t> loadBody() override {
+          const String& body = this->server.arg("plain");
+          return std::make_pair(body.c_str(), body.length());
+        }
+
+        TServer& server;
     };
   };
 };

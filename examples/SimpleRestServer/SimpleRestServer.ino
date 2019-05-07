@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <FS.h>
 
 #include <UrlTokenBindings.h>
 #include <RichHttpServer.h>
@@ -15,6 +16,11 @@ using namespace std::placeholders;
 //   * GET  /things/:id - get specified thing
 //   * PUT  /things/:id - update value for specified thing
 //   * DELETE /things/:id - delete specified thing
+//
+//   * GET  /files - list all files
+//   * POST /files/:filename - create new file with name
+//   * GET  /files/:filename - read given file
+//   * DELETE /files/:filename - delete given file
 //
 // Also supports a route to enable/disable password authentication:
 //
@@ -34,102 +40,96 @@ using namespace std::placeholders;
 #define WIFI_PASSWORD password
 #endif
 
-#if defined(ARDUINO_ARCH_ESP8266)
-RichHttpServer<RichHttp::Generics::Configs::ESP8266Config> server(80);
-#else
-RichHttpServer<RichHttp::Generics::Configs::ESP32Config> server(80);
-#endif
+using RichHttpConfig = RichHttp::Generics::Configs::EspressifBuiltin;
+using RequestContext = RichHttpConfig::RequestContextType;
+
+RichHttpServer<RichHttpConfig> server(80);
+
 std::map<size_t, String> things;
 size_t nextId = 1;
 
-void handleGetThing(const UrlTokenBindings* bindings, RichHttp::Response& response) {
-  size_t id = atoi(bindings->get("thing_id"));
+void handleGetThing(RequestContext& requestContext) {
+  size_t id = atoi(requestContext.pathVariables.get("thing_id"));
 
   if (things.count(id)) {
-    JsonObject thing = response.json.createNestedObject("thing");
+    JsonObject thing = requestContext.response.json.createNestedObject("thing");
     thing["id"] = id;
     thing["val"] = things[id];
-
-    // server.send(200, "application/json", things[id]);
   } else {
-    server.send(404, "text/plain", "Not found");
+    requestContext.response.setCode(404);
+    requestContext.response.json["error"] = "Not found";
   }
 }
 
-void handlePutThing(const UrlTokenBindings* bindings, JsonDocument& request, RichHttp::Response& response) {
-  size_t id = atoi(bindings->get("thing_id"));
+void handlePutThing(RequestContext& request) {
+  size_t id = atoi(request.pathVariables.get("thing_id"));
 
   if (things.count(id)) {
-    JsonObject req = request.as<JsonObject>();
+    JsonObject req = request.getJsonBody().as<JsonObject>();
+
     if (req.containsKey("thing")) {
       req = req["thing"];
       things[id] = req["val"].as<const char*>();
-      response.json["success"] = true;
+      request.response.json["success"] = true;
     } else {
-      response.json["success"] = false;
-      response.json["error"] = "Request object must contain key `thing'.";
-      response.setCode(400);
+      request.response.json["success"] = false;
+      request.response.json["error"] = "Request object must contain key `thing'.";
+      request.response.setCode(400);
     }
   } else {
-    response.json["success"] = false;
-    response.json["error"] = "Not found";
-    response.setCode(404);
+    request.response.json["success"] = false;
+    request.response.json["error"] = "Not found";
+    request.response.setCode(404);
   }
 }
 
-void handleDeleteThing(const UrlTokenBindings* bindings, RichHttp::Response& response) {
-  size_t id = atoi(bindings->get("thing_id"));
+void handleDeleteThing(RequestContext& request) {
+  size_t id = atoi(request.pathVariables.get("thing_id"));
 
   if (things.count(id)) {
     things.erase(id);
-    server.send(200, "application/json", "true");
-    response.json["success"] = true;
+    request.response.json["success"] = true;
   } else {
-    response.json["success"] = false;
-    response.json["error"] = "Not found";
-    response.setCode(404);
+    request.response.json["success"] = false;
+    request.response.json["error"] = "Not found";
+    request.response.setCode(404);
   }
 }
 
-void handleAbout(RichHttp::Response& response) {
-  response.json["ip_address"] = WiFi.localIP().toString();
-  response.json["free_heap"] = ESP.getFreeHeap();
+void handleAbout(RequestContext& request) {
+  request.response.json["ip_address"] = WiFi.localIP().toString();
+  request.response.json["free_heap"] = ESP.getFreeHeap();
+  request.response.json["version"] = "builtin";
 }
 
-void handleAddNewThing() {
-  size_t id = nextId++;
-  const String& val = server.arg("plain");
-  things[id] = val;
+void handleAddNewThing(RequestContext& request) {
+  JsonObject body = request.getJsonBody().as<JsonObject>();
 
-  StaticJsonDocument<100> doc;
-  JsonObject obj = doc.createNestedObject("thing");
-  obj["id"] = id;
-  obj["val"] = val;
+  if (! body["thing"].isNull()) {
+    size_t id = nextId++;
+    things[id] = body["thing"]["val"].as<char*>();
 
-  String response;
-  serializeJson(doc, response);
-
-  server.send(200, "application/json", response);
+    JsonObject obj = request.response.json.createNestedObject("thing");
+    obj["id"] = id;
+    obj["val"] = things[id];
+  } else {
+    request.response.setCode(400);
+    request.response.json["error"] = "Must contain key `thing'";
+  }
 }
 
-void handleListThings() {
-  StaticJsonDocument<1024> doc;
-  JsonArray arr = doc.createNestedArray("things");
+void handleListThings(RequestContext& request) {
+  JsonArray arr = request.response.json.createNestedArray("things");
 
   for (std::map<size_t, String>::iterator it = things.begin(); it != things.end(); ++it) {
     JsonObject obj = arr.createNestedObject();
     obj["id"] = it->first;
     obj["val"] = it->second;
   }
-
-  String response;
-  serializeJson(doc, response);
-
-  server.send(200, "application/json", response);
 }
 
-void handleAuth(JsonDocument& request, RichHttp::Response& response) {
-  JsonObject obj = request.as<JsonObject>();
+void handleAuth(RequestContext& request) {
+  JsonObject obj = request.getJsonBody().as<JsonObject>();
 
   if (obj.containsKey("username") && obj.containsKey("password")) {
     server.requireAuthentication(obj["username"], obj["password"]);
@@ -137,7 +137,62 @@ void handleAuth(JsonDocument& request, RichHttp::Response& response) {
     server.disableAuthentication();
   }
 
-  response.json["success"] = true;
+  request.response.json["success"] = true;
+}
+
+void handleListFiles(RequestContext& request) {
+  JsonArray files = request.response.json.to<JsonArray>();
+
+  Dir dir = SPIFFS.openDir("/files/");
+  while (dir.next()) {
+    JsonObject file = files.createNestedObject();
+    file["name"] = dir.fileName();
+    file["size"] = dir.fileSize();
+  }
+}
+
+void handleReadFile(RequestContext& request) {
+  String filename = String("/files/") + request.pathVariables.get("filename");
+
+  if (SPIFFS.exists(filename)) {
+    File f = SPIFFS.open(filename, "r");
+    server.streamFile(f, "text/plain");
+  } else {
+    request.response.json["error"] = "Not found";
+    request.response.setCode(404);
+  }
+}
+
+void handleAddNewFile(RequestContext& request) {
+  request.response.json["success"] = true;
+}
+
+void handleAddFileUpload(RequestContext& request) {
+  HTTPUpload& upload = server.upload();
+  static File updateFile;
+  String filename = String("/files/") + request.pathVariables.get("filename");
+
+  if (upload.status == UPLOAD_FILE_START) {
+    updateFile = SPIFFS.open(filename, "w");
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (updateFile.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      Serial.println(F("Error updating web file"));
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    updateFile.close();
+  }
+}
+
+void handleDeleteFile(RequestContext& request) {
+  String filename = String("/files/") + request.pathVariables.get("filename");
+
+  if (SPIFFS.exists(filename)) {
+    SPIFFS.remove(filename);
+    request.response.json["success"] = true;
+  } else {
+    request.response.setCode(404);
+    request.response.json["error"] = "Not found";
+  }
 }
 
 void handleStaticResponse(const char* response) {
@@ -146,6 +201,7 @@ void handleStaticResponse(const char* response) {
 
 void setup() {
   Serial.begin(115200);
+  SPIFFS.begin();
 
   WiFi.begin(QUOTE(WIFI_SSID), QUOTE(WIFI_PASSWORD));
 
@@ -154,23 +210,37 @@ void setup() {
   // variable `thing_id`.
   server
     .buildHandler("/things/:thing_id")
-    .onJson(HTTP_GET, handleGetThing)
-    .onJsonBody(HTTP_PUT, handlePutThing)
-    .onJson(HTTP_DELETE, handleDeleteThing);
+    .on(HTTP_GET, handleGetThing)
+    .on(HTTP_PUT, handlePutThing)
+    .on(HTTP_DELETE, handleDeleteThing);
 
   server
     .buildHandler("/things")
-    .onBody(HTTP_POST, std::bind(handleAddNewThing))
-    .on(HTTP_GET, std::bind(handleListThings));
+    .on(HTTP_POST, handleAddNewThing)
+    .on(HTTP_GET, handleListThings);
 
   server
     .buildHandler("/about")
     .setDisableAuthOverride()
-    .onJson(HTTP_GET, std::bind(handleAbout, _2));
+    .on(HTTP_GET, handleAbout);
 
   server
     .buildHandler("/sys/auth")
-    .onJsonBody(HTTP_PUT, std::bind(handleAuth, _2, _3));
+    .on(HTTP_PUT, handleAuth);
+
+  server
+    .buildHandler("/files")
+    .on(HTTP_GET, handleListFiles);
+
+  server
+    .buildHandler("/files/:filename")
+    .on(HTTP_DELETE, handleDeleteFile)
+    .on(HTTP_GET, handleReadFile)
+    .on(HTTP_POST, handleAddNewFile, handleAddFileUpload);
+
+  server
+    .buildHandler("/firmware")
+    .handleOTA();
 
   server.clearBuilders();
   server.begin();

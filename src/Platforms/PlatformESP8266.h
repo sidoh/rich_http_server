@@ -7,6 +7,7 @@
 
 #if defined(ARDUINO_ARCH_ESP8266) && !defined(RICH_HTTP_ASYNC_WEBSERVER)
 #include <ESP8266WebServer.h>
+#include <WiFiUdp.h>
 #define WEBSERVER_H
 
 namespace RichHttp {
@@ -14,7 +15,13 @@ namespace RichHttp {
     class ESP8266RequestHandler;
 
     namespace Configs {
-      using ESP8266Config = espressif_config<ESP8266WebServer, ESP8266RequestHandler>;
+      struct ESP8266Config : espressif_config<ESP8266WebServer, ESP8266RequestHandler> {
+        using _fn_type = BuiltinFns::context_fn_type<ESP8266WebServer>::def::type;
+        using _context_type = EspressifRequestContext<ESP8266WebServer>;
+
+        static const _fn_type OtaHandlerFn;
+        static const _fn_type OtaSuccessHandlerFn;
+      };
       using EspressifBuiltin = ESP8266Config;
     };
 

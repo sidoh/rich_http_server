@@ -45,7 +45,7 @@ public:
     : disableAuth(disableAuth)
     , path(path)
     , server(server)
-    , authedFnBuilder(new typename Config::AuthedFnBuilderType(&server, &server))
+    , fnWrapperBuilder(new typename Config::FnWrapperBuilderType(&server, &server))
   { }
 
   HandlerBuilder& setDisableAuthOverride() {
@@ -53,73 +53,61 @@ public:
     return *this;
   }
 
+  HandlerBuilder<Config>& handleOTA() {
+    return on(HTTP_POST, Config::OtaSuccessHandlerFn, Config::OtaHandlerFn);
+    // typename Config::BodyRequestHandlerFn::type wrappedFn = fnWrapperBuilder->wrapContextFn(Config::OtaHandlerFn, true);
+    // typename Config::UploadRequestHandlerFn::type wrappedUploadFn = fnWrapperBuilder->wrapUploadContextFn(Config::OtaSuccessHandlerFn);
+
+    // if (! this->disableAuth) {
+    //   wrappedFn = fnWrapperBuilder->buildAuthedBodyFn(wrappedFn);
+    //   wrappedUploadFn = fnWrapperBuilder->buildAuthedUploadFn(wrappedUploadFn);
+    // }
+
+    // server.addHandler(
+    //   new typename Config::RequestHandlerType(
+    //     HTTP_POST,
+    //     path.c_str(),
+    //     nullptr,
+    //     wrappedFn,
+    //     wrappedUploadFn
+    //   )
+    // );
+
+    // return *this;
+  }
+
   // Add handlers to the attached server.
-  HandlerBuilder<Config>& on(const typename Config::HttpMethod verb, typename Config::RequestHandlerFn::type fn) {
+  HandlerBuilder<Config>& onSimple(const typename Config::HttpMethod verb, typename Config::RequestHandlerFn::type fn) {
     if (! this->disableAuth) {
-      fn = authedFnBuilder->buildAuthedFn(fn);
+      fn = fnWrapperBuilder->buildAuthedFn(fn);
     }
 
     server.addHandler(new typename Config::RequestHandlerType(verb, path.c_str(), fn, nullptr, nullptr));
     return *this;
   }
 
-  HandlerBuilder<Config>& on(const typename Config::HttpMethod verb, typename Config::RequestHandlerFn::type fn, typename Config::BodyRequestHandlerFn::type bodyFn) {
-    if (! this->disableAuth) {
-      fn = authedFnBuilder->buildAuthedFn(fn);
-      bodyFn = authedFnBuilder->buildAuthedBodyFn(bodyFn);
+  HandlerBuilder<Config>& on(
+    const typename Config::HttpMethod verb,
+    typename Config::ContextHandlerFn::type contextFn,
+    typename Config::UploadContextHandlerFn::type uploadFn = nullptr
+  ) {
+    bool disableBody = uploadFn == nullptr || verb == HTTP_GET;
+    typename Config::BodyRequestHandlerFn::type wrappedFn = fnWrapperBuilder->wrapContextFn(contextFn, disableBody);
+    typename Config::UploadRequestHandlerFn::type wrappedUploadFn = nullptr;
+
+    if (uploadFn != nullptr) {
+      wrappedUploadFn = fnWrapperBuilder->wrapUploadContextFn(uploadFn);
     }
 
-    server.addHandler(new typename Config::RequestHandlerType(path.c_str(), verb, fn, bodyFn, nullptr));
-    return *this;
-  }
-
-  HandlerBuilder<Config>& onBody(const typename Config::HttpMethod verb, typename Config::BodyRequestHandlerFn::type bodyFn) {
     if (! this->disableAuth) {
-      bodyFn = authedFnBuilder->buildAuthedBodyFn(bodyFn);
+      wrappedFn = fnWrapperBuilder->buildAuthedBodyFn(wrappedFn);
+
+      if (wrappedUploadFn) {
+        wrappedUploadFn = fnWrapperBuilder->buildAuthedUploadFn(wrappedUploadFn);
+      }
     }
 
-    server.addHandler(new typename Config::RequestHandlerType(verb, path.c_str(), nullptr, bodyFn, nullptr));
-    return *this;
-  }
-
-  HandlerBuilder<Config>& onUpload(typename Config::RequestHandlerFn::type fn, typename Config::UploadRequestHandlerFn::type uploadFn) {
-    if (! this->disableAuth) {
-      fn = authedFnBuilder->buildAuthedFn(fn);
-      uploadFn = authedFnBuilder->buildAuthedUploadFn(uploadFn);
-    }
-
-    server.addHandler(new typename Config::RequestHandlerType(HTTP_POST, path.c_str(), fn, nullptr, uploadFn));
-    return *this;
-  }
-
-  HandlerBuilder<Config>& onUpload(typename Config::UploadRequestHandlerFn::type uploadFn) {
-    if (! this->disableAuth) {
-      uploadFn = authedFnBuilder->buildAuthedUploadFn(uploadFn);
-    }
-
-    server.addHandler(new typename Config::RequestHandlerType(HTTP_POST, path.c_str(), nullptr, nullptr, uploadFn));
-    return *this;
-  }
-
-  HandlerBuilder<Config>& onJson(const typename Config::HttpMethod verb, typename Config::JsonRequestHandlerFn::type jsonFn) {
-    typename Config::RequestHandlerFn::type wrappedFn = authedFnBuilder->wrapJsonFn(jsonFn);
-
-    if (! this->disableAuth) {
-      wrappedFn = authedFnBuilder->buildAuthedFn(wrappedFn);
-    }
-
-    server.addHandler(new typename Config::RequestHandlerType(verb, path.c_str(), wrappedFn, nullptr, nullptr));
-    return *this;
-  }
-
-  HandlerBuilder<Config>& onJsonBody(const typename Config::HttpMethod verb, typename Config::JsonBodyRequestHandlerFn::type jsonFn) {
-    typename Config::BodyRequestHandlerFn::type wrappedFn = authedFnBuilder->wrapJsonBodyFn(jsonFn);
-
-    if (! this->disableAuth) {
-      wrappedFn = authedFnBuilder->buildAuthedBodyFn(wrappedFn);
-    }
-
-    server.addHandler(new typename Config::RequestHandlerType(verb, path.c_str(), nullptr, wrappedFn, nullptr));
+    server.addHandler(new typename Config::RequestHandlerType(verb, path.c_str(), nullptr, wrappedFn, wrappedUploadFn));
     return *this;
   }
 
@@ -127,5 +115,5 @@ private:
   bool disableAuth;
   const String path;
   RichHttpServer<Config>& server;
-  typename Config::AuthedFnBuilderType* authedFnBuilder;
+  typename Config::FnWrapperBuilderType* fnWrapperBuilder;
 };

@@ -13,6 +13,34 @@
 
 namespace RichHttp {
   namespace Generics {
+    class AsyncRequestContext;
+
+    struct BodyArgs {
+      uint8_t* data;
+      size_t length;
+      size_t index;
+      size_t total;
+
+      bool hasBody() const {
+        return data != nullptr && length > 0;
+      }
+    };
+
+    struct UploadArgs {
+      const String& filename;
+      size_t index;
+      uint8_t *data;
+      size_t length;
+      bool isFinal;
+
+      bool hasUpload() const {
+        return data != nullptr && length > 0;
+      }
+    };
+
+    // Use when creating a request context with no upload
+    static const String NULL_FILENAME;
+
     namespace AsyncFns {
       using handler_type = RichHttp::Generics::FunctionWrapper<void, AsyncWebServerRequest*, const UrlTokenBindings*>;
       using body_handler_type = RichHttp::Generics::FunctionWrapper<
@@ -34,19 +62,7 @@ namespace RichHttp {
         size_t,
         bool
       >;
-      using json_type = RichHttp::Generics::FunctionWrapper<
-        void,
-        AsyncWebServerRequest*,
-        const UrlTokenBindings*,
-        RichHttp::Response&
-      >;
-      using json_body_type = RichHttp::Generics::FunctionWrapper<
-        void,
-        AsyncWebServerRequest*,
-        const UrlTokenBindings*,
-        JsonDocument&,
-        RichHttp::Response&
-      >;
+      using context_fn_type = FunctionWrapper<void, AsyncRequestContext&>;
     };
 
     template <
@@ -54,22 +70,29 @@ namespace RichHttp {
       class THandler = AsyncFns::handler_type,
       class TBodyHandler = AsyncFns::body_handler_type,
       class TUploadHandler = AsyncFns::upload_handler_type,
-      class TJsonHandler = AsyncFns::json_type,
-      class TJsonBodyHandler = AsyncFns::json_body_type
+      class TContextHandler = AsyncFns::context_fn_type,
+      class TUploadContextHandler = AsyncFns::context_fn_type
     >
-    class AsyncAuthedFnBuilder : public AuthedFnBuilder<TServerType, THandler, TBodyHandler, TUploadHandler, TJsonHandler, TJsonBodyHandler> {
+    class AsyncHandlerFnWrapperBuilder
+      : public HandlerFnWrapperBuilder<
+        TServerType,
+        THandler,
+        TBodyHandler,
+        TUploadHandler,
+        TContextHandler,
+        TUploadContextHandler
+      > {
       public:
 
         template <class... Args>
-        AsyncAuthedFnBuilder(Args... args)
-          : AuthedFnBuilder<TServerType, THandler, TBodyHandler, TUploadHandler, TJsonHandler, TJsonBodyHandler>
+        AsyncHandlerFnWrapperBuilder(Args... args)
+          : HandlerFnWrapperBuilder<TServerType, THandler, TBodyHandler, TUploadHandler, TContextHandler, TUploadContextHandler>
         (args...) {}
 
         using fn_type = typename THandler::type;
         using body_fn_type = typename TBodyHandler::type;
         using upload_fn_type = typename TUploadHandler::type;
-        using json_fn_type = typename TJsonHandler::type;
-        using json_body_fn_type = typename TJsonBodyHandler::type;
+        using context_fn_type = typename TContextHandler::type;
 
         virtual fn_type buildAuthedFn(fn_type fn) override {
           return buildAuthedHandler(fn);
@@ -83,40 +106,70 @@ namespace RichHttp {
           return buildAuthedHandler(fn);
         }
 
-        virtual fn_type wrapJsonFn(json_fn_type fn) override {
-          return [this, fn](AsyncWebServerRequest* request, const UrlTokenBindings* bindings) {
+        virtual body_fn_type wrapContextFn(context_fn_type fn, bool disableBody) override {
+          return [this, fn, disableBody](
+            AsyncWebServerRequest* request,
+            const UrlTokenBindings* bindings,
+            uint8_t* data,
+            size_t length,
+            size_t index,
+            size_t total
+          ) {
             DynamicJsonDocument responseDoc(RICH_HTTP_RESPONSE_BUFFER_SIZE);
-            RichHttp::Response response(responseDoc);
+            Response response(responseDoc);
 
-            fn(request, bindings, response);
+            bool hasBody = !disableBody && length > 0;
+
+            AsyncRequestContext context(
+              BodyArgs{ .data = data, .length = length, .index = index, .total = total },
+              UploadArgs{
+                .filename = NULL_FILENAME,
+                .index = 0,
+                .data = nullptr,
+                .length = 0,
+                .isFinal = true
+              },
+              request,
+              response,
+              *bindings,
+              hasBody
+            );
+
+            fn(context);
 
             sendResponse(request, response);
           };
         }
 
-        virtual body_fn_type wrapJsonBodyFn(json_body_fn_type fn) override {
+        virtual upload_fn_type wrapUploadContextFn(context_fn_type fn) override {
           return [this, fn](
-            AsyncWebServerRequest* request,
+            AsyncWebServerRequest *request,
             const UrlTokenBindings* bindings,
-            uint8_t* data,
-            size_t len,
+            const String& filename,
             size_t index,
-            size_t total
+            uint8_t *data,
+            size_t length,
+            bool isFinal
           ) {
-            DynamicJsonDocument requestDoc(RICH_HTTP_REQUEST_BUFFER_SIZE);
-
-            auto error = deserializeJson(requestDoc, data, len);
-
-            if (error) {
-              request->send(400, ::RichHttp::CONTENT_TYPE_TEXT, error.c_str());
-              Serial.printf_P(PSTR("Error parsing client-sent JSON: %s\n"), error.c_str());
-              return;
-            }
-
             DynamicJsonDocument responseDoc(RICH_HTTP_RESPONSE_BUFFER_SIZE);
-            RichHttp::Response response(responseDoc);
+            Response response(responseDoc);
 
-            fn(request, bindings, requestDoc, response);
+            AsyncRequestContext context(
+              BodyArgs{ .data = nullptr, .length = 0, .index = 0, .total = 0 },
+              UploadArgs{
+                .filename = filename,
+                .index = index,
+                .data = data,
+                .length = length,
+                .isFinal = isFinal
+              },
+              request,
+              response,
+              *bindings,
+              false
+            );
+
+            fn(context);
 
             sendResponse(request, response);
           };
@@ -125,7 +178,7 @@ namespace RichHttp {
         void sendResponse(AsyncWebServerRequest* request, RichHttp::Response& response) {
           if (response.isSetBody()) {
             request->send(response.getCode(), response.getBodyType(), response.getBody());
-          } else {
+          } else if (! response.json.isNull()) {
             String body;
             serializeJson(response.json, body);
             request->send(response.getCode(), ::RichHttp::CONTENT_TYPE_JSON, body);
@@ -150,7 +203,7 @@ namespace RichHttp {
     class AsyncRequestHandler;
 
     namespace Configs {
-      using AsyncWebServer = Generics::HandlerConfig<
+      struct AsyncWebServer : Generics::HandlerConfig<
         ::AsyncWebServer,
         WebRequestMethodComposite,
         AsyncWebServerRequest*,
@@ -158,11 +211,19 @@ namespace RichHttp {
         typename AsyncFns::handler_type,
         typename AsyncFns::body_handler_type,
         typename AsyncFns::upload_handler_type,
-        typename AsyncFns::json_type,
-        typename AsyncFns::json_body_type,
+        typename AsyncFns::context_fn_type,
+        typename AsyncFns::context_fn_type,
         ::RichHttp::Generics::AsyncRequestHandler,
-        ::RichHttp::Generics::AsyncAuthedFnBuilder<>
-      >;
+        ::RichHttp::Generics::AsyncHandlerFnWrapperBuilder<>,
+        AsyncRequestContext
+      >
+      {
+        using _fn_type = AsyncFns::context_fn_type::type;
+        using _context_type = AsyncRequestContext;
+
+        static const _fn_type OtaHandlerFn;
+        static const _fn_type OtaSuccessHandlerFn;
+      };
     };
 
     class AsyncRequestHandler : public ::RichHttp::Generics::BaseRequestHandler<Configs::AsyncWebServer, ::AsyncWebHandler> {
@@ -177,8 +238,15 @@ namespace RichHttp {
           return this->_canHandle(request->method(), request->url().c_str(), request->url().length());
         }
 
+        virtual bool isRequestHandlerTrivial() override { return false; }
+
         virtual void handleRequest(AsyncWebServerRequest* request) override {
-          forwardToHandler<>(this->handlerFn, request);
+          if (this->handlerFn) {
+            forwardToHandler<>(this->handlerFn, request);
+          // Will already have been called if there's non-zero content length
+          } else if (this->uploadFn || request->contentLength() == 0) {
+            forwardToHandler<uint8_t*, size_t, size_t, size_t>(this->bodyFn, request, nullptr, 0, 0, 0);
+          }
         }
 
         virtual void handleUpload(
@@ -220,18 +288,32 @@ namespace RichHttp {
         }
     };
 
-    // class JsonAsyncRequestHandler : public ::RichHttp::Generics::BaseRequestHandler<Configs::AsyncWebServer, ::AsyncWebHandler> {
-    //   public:
+    class AsyncRequestContext : public RequestContext {
+      public:
+        template <class... Args>
+        AsyncRequestContext(
+          BodyArgs bodyArgs,
+          UploadArgs uploadArgs,
+          AsyncWebServerRequest* request,
+          Response& response,
+          Args... args
+        ) : RequestContext(response, args...)
+          , body(bodyArgs)
+          , upload(uploadArgs)
+          , rawRequest(request)
+        { }
 
-    //     template <class... Args>
-    //     JsonAsyncRequestHandler(Args... args)
-    //       : AsyncRequestHandler(args...)
-    //     (args...) { }
+        virtual std::pair<const char*, size_t> loadBody() override {
+          return std::make_pair(reinterpret_cast<const char*>(body.data), body.length);
+        }
 
-    //     virtual void handleRequest(AsyncWebServerRequest* request) override {
-    //       forwardToHandler<>(this->handlerFn, request);
-    //     }
-    // };
+        const BodyArgs body;
+        const UploadArgs upload;
+        AsyncWebServerRequest* rawRequest;
+
+      private:
+        String loadedBody;
+    };
   };
 };
 #endif

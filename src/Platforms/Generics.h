@@ -7,6 +7,9 @@
 #include <functional>
 #include <memory>
 
+#include "../RichResponse.h"
+#include "../AuthProvider.h"
+
 #ifndef RICH_HTTP_REQUEST_BUFFER_SIZE
 #define RICH_HTTP_REQUEST_BUFFER_SIZE 1024
 #endif
@@ -20,11 +23,17 @@ namespace RichHttp {
   static const char CONTENT_TYPE_TEXT[] PROGMEM = "text/plain";
 
   namespace Generics {
+    /**
+     * Contains a handler function's signature
+     */
     template <class ReturnType, class... TArgs>
     struct FunctionWrapper {
       using type = typename std::function<ReturnType(TArgs...)>;
     };
 
+    /**
+     * Container for all of the platform-specific generics
+     */
     template <
       class TServer,
       class THttpMethod,
@@ -33,10 +42,11 @@ namespace RichHttp {
       class TRequestHandler,
       class TBodyRequestHandler,
       class TUploadRequestHandler,
-      class TJsonRequestHandler,
-      class TJsonBodyRequestHandler,
+      class TContextHandler,
+      class TUploadContextHandler,
       class TRequestHandlerClass,
-      class TAuthedFnBuilder
+      class TFnWrapperBuilder,
+      class TRequestContext
     >
     struct HandlerConfig {
       using ServerType = TServer;
@@ -46,32 +56,32 @@ namespace RichHttp {
       using RequestHandlerFn = TRequestHandler;
       using BodyRequestHandlerFn = TBodyRequestHandler;
       using UploadRequestHandlerFn = TUploadRequestHandler;
-      using JsonRequestHandlerFn = TJsonRequestHandler;
-      using JsonBodyRequestHandlerFn = TJsonBodyRequestHandler;
+      using ContextHandlerFn = TContextHandler;
+      using UploadContextHandlerFn = TUploadContextHandler;
       using RequestHandlerType = TRequestHandlerClass;
-      using AuthedFnBuilderType = TAuthedFnBuilder;
+      using FnWrapperBuilderType = TFnWrapperBuilder;
+      using RequestContextType = TRequestContext;
     };
 
-    template<
-      class TConfig,
-      class TRequestHandler
-    >
-    struct ServerConfig {
-      using ConfigType = TConfig;
-      using RequestHandlerType = TRequestHandler;
-    };
-
+    /**
+     * Abstract class which serves the purpose of wrapping user-constructed handler functions.
+     * There are two ways this is used:
+     *
+     *   1. Wrap a handler function so that authentication is processed.  When a request comes
+     *      in and auth is enabled, the user's handler fn will be called iff auth validation
+     *      succeeds.
+     */
     template<
       class TServerType,
       class TMethodWrapper,
       class TBodyMethodWrapper,
       class TUploadMethodWrapper,
-      class TJsonMethodWrapper,
-      class TJsonBodyMethodWrapper
+      class TContextHandler,
+      class TUploadContextHandler
     >
-    class AuthedFnBuilder {
+    class HandlerFnWrapperBuilder {
       public:
-        AuthedFnBuilder(TServerType* server, const AuthProvider* authProvider)
+        HandlerFnWrapperBuilder(TServerType* server, const AuthProvider* authProvider)
           : server(server)
           , authProvider(authProvider)
         {}
@@ -80,8 +90,8 @@ namespace RichHttp {
         virtual typename TBodyMethodWrapper::type buildAuthedBodyFn(typename TBodyMethodWrapper::type) = 0;
         virtual typename TUploadMethodWrapper::type buildAuthedUploadFn(typename TUploadMethodWrapper::type) = 0;
 
-        virtual typename TMethodWrapper::type wrapJsonFn(typename TJsonMethodWrapper::type) = 0;
-        virtual typename TBodyMethodWrapper::type wrapJsonBodyFn(typename TJsonBodyMethodWrapper::type) = 0;
+        virtual typename TBodyMethodWrapper::type wrapContextFn(typename TContextHandler::type, bool disableBody) = 0;
+        virtual typename TUploadMethodWrapper::type wrapUploadContextFn(typename TUploadContextHandler::type) = 0;
 
       protected:
         TServerType* server;
@@ -106,21 +116,11 @@ namespace RichHttp {
           , uploadFn(uploadFn)
         {
           strcpy(this->path, _path);
-          patternTokens = ::std::make_shared<TokenIterator>(this->path, strlen(this->path), '/');
+          patternTokens = std::make_shared<TokenIterator>(this->path, strlen(this->path), '/');
         }
 
         virtual ~BaseRequestHandler() {
           delete[] path;
-        }
-
-        BaseRequestHandler& onUpload(typename Config::UploadRequestHandlerFn::type uploadFn) {
-          this->uploadFn = uploadFn;
-          return *this;
-        }
-
-        BaseRequestHandler& onBody(typename Config::BodyRequestHandlerFn::type uploadFn) {
-          this->bodyFn = bodyFn;
-          return *this;
         }
 
         bool canHandlePath(const char* requestPath, size_t length) {
@@ -165,6 +165,78 @@ namespace RichHttp {
         typename Config::BodyRequestHandlerFn::type bodyFn;
         typename Config::UploadRequestHandlerFn::type uploadFn;
         ::std::shared_ptr<TokenIterator> patternTokens;
+    };
+
+    class RequestContext {
+      public:
+        RequestContext(
+          Response& _response,
+          const UrlTokenBindings& pathVariables,
+          bool hasBody
+        ) : response(_response)
+          , pathVariables(pathVariables)
+          , jsonBody(nullptr)
+          , _hasBody(hasBody)
+          , _bodyLoaded(false)
+        { }
+
+        Response& response;
+        const UrlTokenBindings& pathVariables;
+
+        virtual JsonDocument getJsonBody() {
+          if (jsonBody == nullptr) {
+            jsonBody = parseJsonBody();
+          }
+          return *jsonBody;
+        }
+
+        virtual const char* getBody() {
+          _loadBody();
+          return *body;
+        }
+
+        virtual size_t getBodyLength() {
+          _loadBody();
+          return bodyLength;
+        }
+
+        virtual bool hasBody() {
+          return this->_hasBody;
+        }
+
+      protected:
+        virtual std::shared_ptr<JsonDocument> parseJsonBody() {
+          std::shared_ptr<JsonDocument> jsonPtr = std::make_shared<DynamicJsonDocument>(RICH_HTTP_RESPONSE_BUFFER_SIZE);
+          auto error = deserializeJson(*jsonPtr, this->getBody());
+
+          if (error) {
+            JsonObject err = response.json.createNestedObject("error");
+            err["message"] = "Error parsing JSON";
+            err["id"] = error.c_str();
+            response.setCode(400);
+          }
+
+          return jsonPtr;
+        }
+
+        virtual std::pair<const char*, size_t> loadBody() = 0;
+
+      private:
+        std::shared_ptr<UrlTokenBindings> pathBindings;
+        std::shared_ptr<JsonDocument> jsonBody;
+        const char** body;
+        size_t bodyLength;
+        bool _hasBody;
+        bool _bodyLoaded;
+
+        void _loadBody() {
+          if (! this->_bodyLoaded) {
+            std::pair<const char*, size_t> body = loadBody();
+            this->body = &body.first;
+            this->bodyLength = body.second;
+            this->_bodyLoaded = true;
+          }
+        }
     };
   };
 };
