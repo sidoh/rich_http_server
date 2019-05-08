@@ -3,7 +3,7 @@
 void AuthProvider::requireAuthentication(const String& username, const String& password) {
   this->username = username;
   this->password = password;
-  this->authEnabled = false;
+  this->authEnabled = true;
 }
 
 // Disables authentication
