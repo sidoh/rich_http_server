@@ -6,16 +6,16 @@ class AuthProvider {
   public:
 
     // Enables authentication using the provided username and password
-    void requireAuthentication(const String& username, const String& password);
+    virtual void requireAuthentication(const String& username, const String& password);
 
     // Disables authentication
-    void disableAuthentication();
+    virtual void disableAuthentication();
 
     // Returns true if authentication is currently enabled
-    bool isAuthenticationEnabled() const;
+    virtual bool isAuthenticationEnabled() const;
 
-    const String& getUsername() const;
-    const String& getPassword() const;
+    virtual const String& getUsername() const;
+    virtual const String& getPassword() const;
 
   private:
     bool authEnabled;
