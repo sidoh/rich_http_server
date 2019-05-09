@@ -4,7 +4,7 @@
 #include <vector>
 #include <memory>
 
-#include "AuthProvider.h"
+#include "AuthProviders.h"
 
 #include "Platforms/Generics.h"
 #include "Platforms/PlatformESP32.h"
@@ -15,9 +15,12 @@ template <class Config>
 class HandlerBuilder;
 
 template <class Config>
-class RichHttpServer : public Config::ServerType, public AuthProvider {
+class RichHttpServer : public Config::ServerType {
 public:
-  RichHttpServer(int port) : Config::ServerType(port) { }
+  RichHttpServer(int port, const AuthProvider& authProvider)
+    : Config::ServerType(port)
+    , authProvider(authProvider)
+  { }
   ~RichHttpServer() { };
 
   HandlerBuilder<Config>& buildHandler(const String& path, bool disableAuth = false) {
@@ -30,12 +33,13 @@ public:
     handlerBuilders.clear();
   }
 
-private:
-  bool authEnabled;
-  String username;
-  String password;
+  const AuthProvider* getAuthProvider() const {
+    return &authProvider;
+  }
 
+private:
   std::vector<std::shared_ptr<HandlerBuilder<Config>>> handlerBuilders;
+  const AuthProvider& authProvider;
 };
 
 template <class Config>
@@ -45,7 +49,7 @@ public:
     : disableAuth(disableAuth)
     , path(path)
     , server(server)
-    , fnWrapperBuilder(new typename Config::FnWrapperBuilderType(&server, &server))
+    , fnWrapperBuilder(new typename Config::FnWrapperBuilderType(&server, server.getAuthProvider()))
   { }
 
   HandlerBuilder& setDisableAuthOverride() {

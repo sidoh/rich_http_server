@@ -8,7 +8,7 @@
 #include <memory>
 
 #include "../RichResponse.h"
-#include "../AuthProvider.h"
+#include "../AuthProviders.h"
 
 #ifndef RICH_HTTP_REQUEST_BUFFER_SIZE
 #define RICH_HTTP_REQUEST_BUFFER_SIZE 1024

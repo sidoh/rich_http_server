@@ -5,10 +5,11 @@
 #include <SPIFFS.h>
 #endif
 
-#include <UrlTokenBindings.h>
-#include <RichHttpServer.h>
 #include <map>
 #include <functional>
+
+#include <UrlTokenBindings.h>
+#include <RichHttpServer.h>
 
 using namespace std::placeholders;
 
@@ -46,7 +47,8 @@ using namespace std::placeholders;
 using RichHttpConfig = RichHttp::Generics::Configs::EspressifBuiltin;
 using RequestContext = RichHttpConfig::RequestContextType;
 
-RichHttpServer<RichHttpConfig> server(80);
+SimpleAuthProvider authProvider;
+RichHttpServer<RichHttpConfig> server(80, authProvider);
 
 std::map<size_t, String> things;
 size_t nextId = 1;
@@ -135,9 +137,9 @@ void handleAuth(RequestContext& request) {
   JsonObject obj = request.getJsonBody().as<JsonObject>();
 
   if (obj.containsKey("username") && obj.containsKey("password")) {
-    server.requireAuthentication(obj["username"], obj["password"]);
+    authProvider.requireAuthentication(obj["username"], obj["password"]);
   } else {
-    server.disableAuthentication();
+    authProvider.disableAuthentication();
   }
 
   request.response.json["success"] = true;
