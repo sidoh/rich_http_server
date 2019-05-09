@@ -31,3 +31,26 @@ private:
   String password;
   bool authEnabled;
 };
+
+template <class T>
+class PassthroughAuthProvider : public AuthProvider {
+public:
+  PassthroughAuthProvider(const T& proxy)
+    : proxy(proxy)
+  { }
+
+  virtual bool isAuthenticationEnabled() const override {
+    return proxy.isAuthenticationEnabled();
+  }
+
+  virtual const String& getUsername() const override {
+    return proxy.getUsername();
+  }
+
+  virtual const String& getPassword() const override {
+    return proxy.getPassword();
+  }
+
+private:
+  const T& proxy;
+};
