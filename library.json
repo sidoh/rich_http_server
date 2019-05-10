@@ -17,7 +17,7 @@
     }
   ],
   "license": "MIT",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "frameworks": "arduino",
   "platforms": [
     "espressif8266",
@@ -30,7 +30,11 @@
   "dependencies": [
     {
       "name": "PathVariableHandlers",
-      "version": "~1.1.0"
+      "version": "~2.0.0"
+    },
+    {
+      "name": "ArduinoJson",
+      "version": "~6.10.1"
     }
   ]
 }

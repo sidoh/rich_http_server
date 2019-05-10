@@ -1,15 +1,15 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <FS.h>
-#if defined(ESP32)
-#include <SPIFFS.h>
-#endif
 
-#include <map>
-#include <functional>
+#include <ESPAsyncWebServer.h>
 
 #include <UrlTokenBindings.h>
 #include <RichHttpServer.h>
+#include <map>
+
+#if defined(ESP32)
+#include <SPIFFS.h>
+#endif
 
 using namespace std::placeholders;
 
@@ -20,11 +20,6 @@ using namespace std::placeholders;
 //   * GET  /things/:id - get specified thing
 //   * PUT  /things/:id - update value for specified thing
 //   * DELETE /things/:id - delete specified thing
-//
-//   * GET  /files - list all files
-//   * POST /files/:filename - create new file with name
-//   * GET  /files/:filename - read given file
-//   * DELETE /files/:filename - delete given file
 //
 // Also supports a route to enable/disable password authentication:
 //
@@ -37,14 +32,14 @@ using namespace std::placeholders;
 #define QUOTE(x) XQUOTE(x)
 
 #ifndef WIFI_SSID
-#define WIFI_SSID ssid
+#define WIFI_SSID "ssid"
 #endif
 
 #ifndef WIFI_PASSWORD
-#define WIFI_PASSWORD password
+#define WIFI_PASSWORD "password"
 #endif
 
-using RichHttpConfig = RichHttp::Generics::Configs::EspressifBuiltin;
+using RichHttpConfig = RichHttp::Generics::Configs::AsyncWebServer;
 using RequestContext = RichHttpConfig::RequestContextType;
 
 SimpleAuthProvider authProvider;
@@ -104,7 +99,7 @@ void handleDeleteThing(RequestContext& request) {
 void handleAbout(RequestContext& request) {
   request.response.json["ip_address"] = WiFi.localIP().toString();
   request.response.json["free_heap"] = ESP.getFreeHeap();
-  request.response.json["version"] = "builtin";
+  request.response.json["version"] = "async";
 }
 
 void handleAddNewThing(RequestContext& request) {
@@ -180,8 +175,7 @@ void handleReadFile(RequestContext& request) {
   String filename = String("/files/") + request.pathVariables.get("filename");
 
   if (SPIFFS.exists(filename)) {
-    File f = SPIFFS.open(filename, "r");
-    server.streamFile(f, "text/plain");
+    request.rawRequest->send(SPIFFS, filename, "text/plain");
   } else {
     request.response.json["error"] = "Not found";
     request.response.setCode(404);
@@ -189,21 +183,21 @@ void handleReadFile(RequestContext& request) {
 }
 
 void handleAddNewFile(RequestContext& request) {
+  Serial.println("adding");
   request.response.json["success"] = true;
 }
 
 void handleAddFileUpload(RequestContext& request) {
-  HTTPUpload& upload = server.upload();
   static File updateFile;
-  String filename = String("/files/") + request.pathVariables.get("filename");
 
-  if (upload.status == UPLOAD_FILE_START) {
+  if (! request.upload.index) {
+    String filename = String("/files/") + request.pathVariables.get("filename");
     updateFile = SPIFFS.open(filename, "w");
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
-    if (updateFile.write(upload.buf, upload.currentSize) != upload.currentSize) {
-      Serial.println(F("Error updating web file"));
-    }
-  } else if (upload.status == UPLOAD_FILE_END) {
+  }
+  for (size_t i = 0; i < request.upload.length; ++i) {
+    updateFile.write(request.upload.data[i]);
+  }
+  if (request.upload.isFinal) {
     updateFile.close();
   }
 }
@@ -218,10 +212,6 @@ void handleDeleteFile(RequestContext& request) {
     request.response.setCode(404);
     request.response.json["error"] = "Not found";
   }
-}
-
-void handleStaticResponse(const char* response) {
-  server.send(200, "text/plain", response);
 }
 
 void setup() {
@@ -272,5 +262,4 @@ void setup() {
 }
 
 void loop() {
-  server.handleClient();
 }
