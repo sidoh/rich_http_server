@@ -50,9 +50,12 @@ using namespace::placeholders;
 using RichHttpConfig = RichHttp::Generics::Configs::EspressifBuiltin;
 using RequestContext = RichHttpConfig::RequestContextType;
 
+// Use the default auth provider
+SimpleAuthProvider authProvider;
+
 // Use the builtin server (ESP8266WebServer for ESP8266, WebServer for ESP32).
 // Listen on port 80.
-RichHttpServer<RichHttpConfig> server(80);
+RichHttpServer<RichHttpConfig> server(80, authProvider);
 
 // Handlers for normal routes follow the same structure
 void handleGetAbout(RequestContext& request) {
@@ -124,9 +127,12 @@ The only meaningful change to the above sketch for the builtin webserver is to u
 using RichHttpConfig = RichHttp::Generics::Configs::AsyncWebServer;
 using RequestContext = RichHttpConfig::RequestContextType;
 
+// Use the default auth provider
+SimpleAuthProvider authProvider;
+
 // Use ESPAsyncWebServer
 // Listen on port 80.
-RichHttpServer<RichHttpConfig> server(80);
+RichHttpServer<RichHttpConfig> server(80, authProvider);
 ```
 
 The rest of the handlers are the same.  The raw `AsyncWebServerRequest` pointer is provided in the `RequestContext` parameter:
@@ -135,6 +141,17 @@ The rest of the handlers are the same.  The raw `AsyncWebServerRequest` pointer 
 void myHandler(RequestContext& request) {
   AsyncWebServerRequest* rawRequest = request.rawRequest;
 }
+```
+
+#### Authentication
+
+The second argument to the `RichHttpServer` constructor is an `AuthProvider` reference.  `AuthProvider` has a simple interface:
+
+```c++
+  virtual bool isAuthenticationEnabled() const;
+
+  virtual const String& getUsername() const;
+  virtual const String& getPassword() const;
 ```
 
 ## Development
