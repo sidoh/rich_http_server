@@ -154,6 +154,20 @@ The second argument to the `RichHttpServer` constructor is an `AuthProvider` ref
   virtual const String& getPassword() const;
 ```
 
+Other than the no-op implementation, in which authentication is always disabled, there are two additional provided implementations:
+
+1. `BasicAuthProvider` exposes simple methods to enable/disable auth
+2. `PassthroughAuthProvider` passes the interface methods onto a provided proxy object.  Useful if you've got a settings container that implements the above methods.
+
+See the examples for further detail.
+
+## Example projects
+
+1. [esp8266_milight_hub](https://github.com/sidoh/esp8266_milight_hub)
+2. [epaper_templates](https://github.com/sidoh/epaper_templates)
+3. [esp8266_pin_server](https://github.com/sidoh/esp8266_pin_server)
+4. [esp8266_thermometer](https://github.com/sidoh/esp8266_thermometer)
+
 ## Development
 
 Build examples with, for instance:
@@ -165,4 +179,4 @@ platformio ci --board=d1_mini --lib=. examples/SimpleRestServer
 #### New Release
 
 1. Update version in `library.properties` and `library.json`.
-1. Create a new tag with the corresponding version and push.
+2. Create a new tag with the corresponding version and push.
