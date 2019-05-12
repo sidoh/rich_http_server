@@ -237,20 +237,6 @@ namespace RichHttp {
           , server(server)
         { }
 
-        virtual std::shared_ptr<JsonDocument> parseJsonBody() override {
-          std::shared_ptr<JsonDocument> jsonPtr = std::make_shared<DynamicJsonDocument>(RICH_HTTP_RESPONSE_BUFFER_SIZE);
-          auto error = deserializeJson(*jsonPtr, this->getBody());
-
-          if (error) {
-            JsonObject err = response.json.createNestedObject("error");
-            err["message"] = "Error parsing JSON";
-            err["id"] = error.c_str();
-            response.setCode(400);
-          }
-
-          return jsonPtr;
-        }
-
         virtual std::pair<const char*, size_t> loadBody() override {
           const String& body = this->server.arg("plain");
           return std::make_pair(body.c_str(), body.length());
