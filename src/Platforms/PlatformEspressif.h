@@ -238,11 +238,15 @@ namespace RichHttp {
         { }
 
         virtual std::pair<const char*, size_t> loadBody() override {
-          const String& body = this->server.arg("plain");
-          return std::make_pair(body.c_str(), body.length());
+          this->_body = this->server.arg("plain");
+          return std::make_pair(this->_body.c_str(), this->_body.length());
         }
 
         TServer& server;
+
+      private:
+        // Have to keep a copy of the returned body.
+        String _body;
     };
   };
 };
