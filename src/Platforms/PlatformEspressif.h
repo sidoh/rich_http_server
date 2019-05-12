@@ -207,7 +207,7 @@ namespace RichHttp {
             this->server->send(response.getCode(), response.getBodyType(), response.getBody());
           } else if (! response.json.isNull()) {
             this->server->setContentLength(measureJson(response.json));
-            this->server->send_P(response.getCode(), ::RichHttp::CONTENT_TYPE_JSON, PSTR(""));
+            this->server->send_P(response.getCode(), ::RichHttp::CONTENT_TYPE_JSON, "");
 
             WiFiClient dest = this->server->client();
             serializeJson(response.json, dest);
