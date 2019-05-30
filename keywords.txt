@@ -1,9 +1,9 @@
-RichHttpServer	        KEYWORD1
+RichHttpServer	KEYWORD1
 
-onAuthenticated         KEYWORD2
-onPatternAuthenticated  KEYWORD2
-onPattern               KEYWORD2
-requireAuthentication   KEYWORD2
-disableAuthentication   KEYWORD2
-isAuthenticationEnabled KEYWORD2
-isClientConnected       KEYWORD2
+onAuthenticated	KEYWORD2
+onPatternAuthenticated	KEYWORD2
+onPattern	KEYWORD2
+requireAuthentication	KEYWORD2
+disableAuthentication	KEYWORD2
+isAuthenticationEnabled	KEYWORD2
+isClientConnected	KEYWORD2
