@@ -183,7 +183,7 @@ namespace RichHttp {
         Response& response;
         const UrlTokenBindings& pathVariables;
 
-        virtual JsonDocument getJsonBody() {
+        virtual JsonDocument& getJsonBody() {
           if (jsonBody == nullptr) {
             jsonBody = parseJsonBody();
           }
