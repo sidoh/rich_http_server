@@ -26,10 +26,10 @@ jobs:
       - name: Install PlatformIO Core
         run: |
           pip install -U platformio
-          platformio update
-          pio pkg install -l 'ArduinoJson@~6.20'
-          pio pkg install -l 'PathVariableHandlers@~2.0'
-          pio pkg install -l 'me-no-dev/ESP Async WebServer'
+          pio pkg update
+          pio pkg install -gl 'ArduinoJson@~6.20'
+          pio pkg install -gl 'PathVariableHandlers@~2.0'
+          pio pkg install -gl 'me-no-dev/ESP Async WebServer'
 
       - name: Build PlatformIO
         run: |
