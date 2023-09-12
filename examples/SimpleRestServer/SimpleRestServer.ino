@@ -112,7 +112,7 @@ void handleAddNewThing(RequestContext& request) {
 
   if (! body["thing"].isNull()) {
     size_t id = nextId++;
-    things[id] = body["thing"]["val"].as<char*>();
+    things[id] = body["thing"]["val"].as<const char*>();
 
     JsonObject obj = request.response.json.createNestedObject("thing");
     obj["id"] = id;

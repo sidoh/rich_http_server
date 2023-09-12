@@ -73,15 +73,15 @@ namespace RichHttp {
         EspressifRequestHandler(Args... args) : RichHttp::Generics::BaseRequestHandler<TConfig, ::RequestHandler>(HTTP_ANY, args...)
         { }
 
-        virtual bool canHandle(typename TConfig::HttpMethod method, String uri) override {
+        virtual bool canHandle(typename TConfig::HttpMethod method, const String& uri) override {
           return this->_canHandle(method, uri.c_str(), uri.length());
         }
 
-        virtual bool canUpload(String uri) override {
+        virtual bool canUpload(const String& uri) override {
           return this->uploadFn && this->_canHandle(HTTP_POST, uri.c_str(), uri.length());
         }
 
-        virtual bool handle(typename TConfig::ServerType& server, typename TConfig::HttpMethod method, String uri) override {
+        virtual bool handle(typename TConfig::ServerType& server, typename TConfig::HttpMethod method, const String& uri) override {
           if (! this->canHandle(method, uri)) {
             return false;
           }
@@ -103,7 +103,7 @@ namespace RichHttp {
           return true;
         }
 
-        virtual void upload(typename TConfig::ServerType& server, String uri, HTTPUpload& upload) override {
+        virtual void upload(typename TConfig::ServerType& server, const String& uri, HTTPUpload& upload) override {
           if (this->uploadFn) {
             char requestUriCopy[uri.length() + 1];
             strcpy(requestUriCopy, uri.c_str());
