@@ -36,5 +36,5 @@ jobs:
           pio ci \
             --board=${{ matrix.board }} \
             --lib=. \
-            --project-option="build_flags=${{ matrix.source == "AsyncRestServer" ? "-DRICH_HTTP_ASYNC_WEBSERVER" : "" }}" \
+            --project-option="build_flags=${{ matrix.source == "AsyncRestServer" && "-DRICH_HTTP_ASYNC_WEBSERVER" || "" }}" \
           examples/${{ matrix.source }}
