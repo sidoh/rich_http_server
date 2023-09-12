@@ -29,7 +29,7 @@ jobs:
           pio pkg update
           pio pkg install -gl 'ArduinoJson@~6.20'
           pio pkg install -gl 'PathVariableHandlers@~2.0'
-          pio pkg install -gl 'me-no-dev/ESP Async WebServer'
+          pio pkg install -gl 'https://github.com/me-no-dev/ESPAsyncWebServer.git'
 
       - name: Build PlatformIO
         run: |
