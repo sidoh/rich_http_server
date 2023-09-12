@@ -17,7 +17,7 @@
     }
   ],
   "license": "MIT",
-  "version": "2.0.3",
+  "version": "3.0.0",
   "frameworks": "arduino",
   "platforms": [
     "espressif8266",
@@ -34,7 +34,7 @@
     },
     {
       "name": "ArduinoJson",
-      "version": "~6.10.1"
+      "version": "~6.20"
     }
   ]
 }
