@@ -25,10 +25,10 @@ namespace RichHttp {
       using EspressifBuiltin = ESP8266Config;
     };
 
-    class ESP8266RequestHandler : public EspressifRequestHandler<Configs::ESP8266Config> {
+    class ESP8266RequestHandler : public EspressifRequestHandler<Configs::ESP8266Config, const String&> {
       public:
         template <class... Args>
-        ESP8266RequestHandler(Args... args) : EspressifRequestHandler<Configs::ESP8266Config>(args...) { }
+        ESP8266RequestHandler(Args... args) : EspressifRequestHandler<Configs::ESP8266Config, const String&>(args...) { }
     };
   };
 };
