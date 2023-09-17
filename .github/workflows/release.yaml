@@ -1,0 +1,48 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: release
+
+    steps:
+      - name: Create Release
+        uses: actions/github-script@v2
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const fs = require('fs').promises;
+            
+            const { repo: { owner, repo }, sha } = context;
+            console.log({ owner, repo, sha });
+
+            const release = await github.repos.createRelease({
+              owner, repo,
+              name: process.env.GITHUB_REF_NAME,
+              tag_name: process.env.GITHUB_REF,
+              draft: true,
+              target_commitish: sha
+            });
+
+  publish_pio_package:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: release
+
+    env:
+      PLATFORMIO_AUTH_TOKEN: ${{secrets.PLATFORMIO_AUTH_TOKEN}}
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install PlatformIO Core
+        run: pip install --upgrade platformio
+      - name: Publish PlatformIO Package
+        run: python3 -m platformio pkg publish --no-interactive
