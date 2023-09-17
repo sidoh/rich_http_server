@@ -277,11 +277,7 @@ namespace RichHttp {
           OtherArgs... args
         ) {
           if (fn) {
-            char requestUriCopy[request->url().length() + 1];
-            strcpy(requestUriCopy, request->url().c_str());
-            TokenIterator requestTokens(requestUriCopy, request->url().length(), '/');
-
-            UrlTokenBindings bindings(*(this->patternTokens), requestTokens);
+            UrlTokenBindings bindings(this->patternTokens, request->url().c_str());
 
             fn(request, &bindings, args...);
           }

@@ -28,7 +28,7 @@ jobs:
           pip install -U platformio
           pio pkg update
           pio pkg install -gl 'ArduinoJson@~6.20'
-          pio pkg install -gl 'PathVariableHandlers@~2.0'
+          pio pkg install -gl 'PathVariableHandlers@~3.0'
           pio pkg install -gl 'https://github.com/me-no-dev/ESPAsyncWebServer.git'
 
       - name: Build PlatformIO

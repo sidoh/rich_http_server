@@ -86,11 +86,7 @@ namespace RichHttp {
             return false;
           }
 
-          char requestUriCopy[uri.length() + 1];
-          strcpy(requestUriCopy, uri.c_str());
-          TokenIterator requestTokens(requestUriCopy, uri.length(), '/');
-
-          UrlTokenBindings bindings(*(this->patternTokens), requestTokens);
+          UrlTokenBindings bindings(this->patternTokens, uri.c_str());
 
           if (this->handlerFn) {
             this->handlerFn(&bindings);
@@ -105,12 +101,7 @@ namespace RichHttp {
 
         virtual void upload(typename TConfig::ServerType& server, StringType uri, HTTPUpload& upload) override {
           if (this->uploadFn) {
-            char requestUriCopy[uri.length() + 1];
-            strcpy(requestUriCopy, uri.c_str());
-            TokenIterator requestTokens(requestUriCopy, uri.length(), '/');
-
-            UrlTokenBindings bindings(*(this->patternTokens), requestTokens);
-
+            UrlTokenBindings bindings(this->patternTokens, uri.c_str());
             this->uploadFn(&bindings);
           }
         }
