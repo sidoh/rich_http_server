@@ -110,23 +110,17 @@ namespace RichHttp {
           typename Config::UploadRequestHandlerFn::type uploadFn = NULL
         ) : anyMethod(anyMethod)
           , method(method)
-          , path(new char[strlen(_path) + 1])
           , handlerFn(handlerFn)
           , bodyFn(bodyFn)
           , uploadFn(uploadFn)
         {
-          strcpy(this->path, _path);
-          patternTokens = std::make_shared<TokenIterator>(this->path, strlen(this->path), '/');
+          patternTokens = std::make_shared<TokenIterator>(_path, strlen(_path), '/');
         }
 
-        virtual ~BaseRequestHandler() {
-          delete[] path;
-        }
+        virtual ~BaseRequestHandler() = default;
 
         bool canHandlePath(const char* requestPath, size_t length) {
-          char requestUriCopy[length+1];
-          strcpy(requestUriCopy, requestPath);
-          TokenIterator requestTokens(requestUriCopy, length, '/');
+          TokenIterator requestTokens(requestPath, length, '/');
 
           bool canHandle = true;
 
@@ -160,7 +154,6 @@ namespace RichHttp {
       protected:
         typename Config::HttpMethod anyMethod;
         typename Config::HttpMethod method;
-        char* path;
         typename Config::RequestHandlerFn::type handlerFn;
         typename Config::BodyRequestHandlerFn::type bodyFn;
         typename Config::UploadRequestHandlerFn::type uploadFn;
