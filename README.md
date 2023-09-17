@@ -1,4 +1,4 @@
-# Rich HTTP Server [![Build Status](https://travis-ci.org/sidoh/rich_http_server.svg?branch=master)](https://travis-ci.org/sidoh/rich_http_server)
+# Rich HTTP Server [![Build](https://github.com/sidoh/rich_http_server/actions/workflows/build.yaml/badge.svg)](https://github.com/sidoh/rich_http_server/actions/workflows/build.yaml)
 
 This is a library that's built on top of common HTTP servers for Espressif (ESP8266, ESP32) platforms.  It makes it simple to build modern REST APIs, and removes some of the fuss from implementing common features such as authentication.
 
