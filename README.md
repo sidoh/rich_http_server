@@ -26,7 +26,7 @@ lib_deps =
   RichHttpServer
 
   ; Use latest patch for given version
-  RichHttpServer@~2.0.0
+  RichHttpServer@~3.1
 
   ; Use branch from github
   ; sidoh/rich_http_server#branch

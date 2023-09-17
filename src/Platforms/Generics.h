@@ -110,37 +110,31 @@ namespace RichHttp {
           typename Config::UploadRequestHandlerFn::type uploadFn = NULL
         ) : anyMethod(anyMethod)
           , method(method)
-          , path(new char[strlen(_path) + 1])
           , handlerFn(handlerFn)
           , bodyFn(bodyFn)
           , uploadFn(uploadFn)
         {
-          strcpy(this->path, _path);
-          patternTokens = std::make_shared<TokenIterator>(this->path, strlen(this->path), '/');
+          patternTokens = std::make_shared<TokenIterator>(_path, strlen(_path), '/');
         }
 
-        virtual ~BaseRequestHandler() {
-          delete[] path;
-        }
+        virtual ~BaseRequestHandler() = default;
 
         bool canHandlePath(const char* requestPath, size_t length) {
-          char requestUriCopy[length+1];
-          strcpy(requestUriCopy, requestPath);
-          TokenIterator requestTokens(requestUriCopy, length, '/');
+          auto requestTokens = std::make_shared<TokenIterator>(requestPath, length, '/');
 
           bool canHandle = true;
 
           patternTokens->reset();
-          while (patternTokens->hasNext() && requestTokens.hasNext()) {
+          while (patternTokens->hasNext() && requestTokens->hasNext()) {
             const char* patternToken = patternTokens->nextToken();
-            const char* requestToken = requestTokens.nextToken();
+            const char* requestToken = requestTokens->nextToken();
 
             if (patternToken[0] != ':' && strcmp(patternToken, requestToken) != 0) {
               canHandle = false;
               break;
             }
 
-            if (patternTokens->hasNext() != requestTokens.hasNext()) {
+            if (patternTokens->hasNext() != requestTokens->hasNext()) {
               canHandle = false;
               break;
             }
@@ -160,7 +154,6 @@ namespace RichHttp {
       protected:
         typename Config::HttpMethod anyMethod;
         typename Config::HttpMethod method;
-        char* path;
         typename Config::RequestHandlerFn::type handlerFn;
         typename Config::BodyRequestHandlerFn::type bodyFn;
         typename Config::UploadRequestHandlerFn::type uploadFn;
